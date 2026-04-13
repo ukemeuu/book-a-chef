@@ -1,0 +1,74 @@
+[
+  {
+    "id": "c_1",
+    "firstName": "Amina",
+    "lastName": "Hassan",
+    "title": "Taste of the Coast",
+    "avatarUrl": "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&q=80&w=800",
+    "coverUrl": "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&q=80&w=2070",
+    "rating": 4.9,
+    "reviewCount": 87,
+    "location": "Mombasa (Travels to Nairobi)",
+    "pricePerGuest": 3500,
+    "cuisines": ["Swahili", "Seafood", "Halal"],
+    "bio": "I specialize in authentic coastal Swahili dishes, bringing generations of family recipes directly to your modern dinner table. My passion is seafood infused with coconut and rich coastal spices.",
+    "featuredMenu": {
+      "title": "Mombasa Sunset Feast",
+      "price": 4500,
+      "courses": [
+        { "course": "Starter", "dish": "Viazi Karai with Tamarind Chutney" },
+        { "course": "Main", "dish": "Samaki wa Kupaka (Grilled fish in coconut sauce) with Wali wa Nazi" },
+        { "course": "Dessert", "dish": "Warm Mahamri alongside Cardamom Chai" }
+      ]
+    },
+    "whatsappLink": "https://wa.me/254700000000?text=Hi%20Book A Chef%21%20I%20would%20like%20to%20request%20a%20booking%20with%20Chef%20Amina%20for%20the%20Mombasa%20Sunset%20Feast."
+  },
+  {
+    "id": "c_2",
+    "firstName": "David",
+    "lastName": "Omondi",
+    "title": "The Grill Master",
+    "avatarUrl": "https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?auto=format&fit=crop&q=80&w=800",
+    "coverUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=2069",
+    "rating": 5.0,
+    "reviewCount": 42,
+    "location": "Nairobi (Kilimani, Karen, Kileleshwa)",
+    "pricePerGuest": 4500,
+    "cuisines": ["Nyama Choma", "BBQ", "Kenyan Traditional"],
+    "bio": "Elevating the classic Kenyan Nyama Choma experience. I bring the prime cuts, the grill, and the unforgettable smoky flavors directly to your backyard.",
+    "featuredMenu": {
+      "title": "The Ultimate Backyard BBQ",
+      "price": 5500,
+      "courses": [
+        { "course": "Starter", "dish": "Mutura Bites & Kachumbari Cups" },
+        { "course": "Main", "dish": "Slow-roasted Mbuzi Choma & Kuku Kienyeji with Creamy Mukimo" },
+        { "course": "Dessert", "dish": "Tropical Fruit Skewers with Honey Glaze" }
+      ]
+    },
+    "whatsappLink": "https://wa.me/254700000000?text=Hi%20Book A Chef%21%20I%20would%20like%20to%20request%20a%20booking%20with%20Chef%20David%20for%20the%20Backyard%20BBQ."
+  },
+  {
+    "id": "c_3",
+    "firstName": "Sarah",
+    "lastName": "Wanjiku",
+    "title": "Modern Continental",
+    "avatarUrl": "https://images.unsplash.com/photo-1595273670150-bd0c3c392e46?auto=format&fit=crop&q=80&w=800",
+    "coverUrl": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=2070",
+    "rating": 4.8,
+    "reviewCount": 115,
+    "location": "Nairobi (Westlands, Runda)",
+    "pricePerGuest": 6000,
+    "cuisines": ["Continental", "Italian", "Fine Dining"],
+    "bio": "Michelin-trained techniques brought to your home. Perfect for romantic anniversary dinners or high-end corporate hosting, offering visually stunning plated courses.",
+    "featuredMenu": {
+      "title": "The Truffle & Steak Experience",
+      "price": 7500,
+      "courses": [
+        { "course": "Starter", "dish": "Burrata with Heirloom Tomatoes & Balsamic Glaze" },
+        { "course": "Main", "dish": "Pan-seared Beef Tenderloin with Truffle Mash & Asparagus" },
+        { "course": "Dessert", "dish": "Decadent Valrhona Chocolate Fondant" }
+      ]
+    },
+    "whatsappLink": "https://wa.me/254700000000?text=Hi%20Book A Chef%21%20I%20would%20like%20to%20request%20a%20booking%20with%20Chef%20Sarah%20for%20a%20Fine%20Dining%20experience."
+  }
+]
