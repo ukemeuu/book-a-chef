@@ -14,6 +14,8 @@ export interface ChefData {
     location: string;
     price_per_guest: number;
     cuisines: string[];
+    bio?: string;
+    whatsapp_link?: string;
 }
 
 export default function ChefCard({ chef }: { chef: ChefData }) {

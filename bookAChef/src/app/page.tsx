@@ -133,7 +133,7 @@ export default function Home() {
         <div className="mb-8 text-2xl font-extrabold tracking-tight text-gray-900">
           Book A <span className="text-orange-600 italic">Chef</span>
         </div>
-        <p className="text-gray-400 font-bold uppercase tracking-[0.3em] text-[10px]">© 2026 Book A Chef Intl. Elevating Kenya's Culinary Landscape.</p>
+        <p className="text-gray-400 font-bold uppercase tracking-[0.3em] text-[10px]">© 2026 Book A Chef Intl. Elevating Kenya&apos;s Culinary Landscape.</p>
       </footer>
     </div>
   );

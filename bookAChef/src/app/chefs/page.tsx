@@ -1,25 +1,109 @@
+'use client'
+
 import { searchChefs, ChefFilterState } from '@/app/actions/searchChefs'
 import ChefCard from '@/components/ChefCard'
-import { Search, MapPin, SlidersHorizontal, ChevronRight } from 'lucide-react'
+import { Search, MapPin, SlidersHorizontal, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
 
-export default async function ChefsPage({
-    searchParams,
-}: {
-    searchParams: { [key: string]: string | string[] | undefined }
-}) {
-    const filters: ChefFilterState = {
-        location: searchParams.location as string || '',
-        cuisines: Array.isArray(searchParams.cuisines) ? searchParams.cuisines : (searchParams.cuisines ? [searchParams.cuisines as string] : []),
-        minPrice: searchParams.minPrice ? parseInt(searchParams.minPrice as string) : undefined,
-        maxPrice: searchParams.maxPrice ? parseInt(searchParams.maxPrice as string) : undefined,
-        minRating: 0,
-        page: 1,
-        limit: 20
-    }
+function ChefsContent() {
+    const searchParams = useSearchParams()
+    const [chefs, setChefs] = useState<any[]>([])
+    const [totalCount, setTotalCount] = useState(0)
+    const [loading, setLoading] = useState(true)
 
-    const { chefs, totalCount } = await searchChefs(filters)
+    const location = searchParams.get('location') || ''
+    const cuisinesRaw = searchParams.get('cuisines')
+    const cuisines = cuisinesRaw ? [cuisinesRaw] : []
+    const minPrice = searchParams.get('minPrice') ? parseInt(searchParams.get('minPrice')!) : undefined
+    const maxPrice = searchParams.get('maxPrice') ? parseInt(searchParams.get('maxPrice')!) : undefined
 
+    useEffect(() => {
+        const fetchChefs = async () => {
+            setLoading(true)
+            const filters: ChefFilterState = {
+                location,
+                cuisines,
+                minPrice,
+                maxPrice,
+                minRating: 0,
+                page: 1,
+                limit: 20
+            }
+            try {
+                const result = await searchChefs(filters)
+                setChefs(result.chefs)
+                setTotalCount(result.totalCount)
+            } catch (err) {
+                console.error(err)
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchChefs()
+    }, [location, cuisinesRaw, minPrice, maxPrice])
+
+    return (
+        <main className="max-w-7xl mx-auto px-6 pt-32">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                <div>
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-orange-600 mb-2">
+                       <MapPin className="h-3 w-3" /> {location || 'All Locations'}
+                    </div>
+                    <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
+                        {loading ? 'Searching...' : `${totalCount} ${totalCount === 1 ? 'Chef' : 'Chefs'} found in ${location || 'Kenya'}`}
+                    </h1>
+                </div>
+                
+                <button className="flex items-center gap-2 bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">
+                    <SlidersHorizontal className="h-4 w-4" /> Filters
+                </button>
+            </div>
+
+            {loading ? (
+                <div className="flex flex-col items-center justify-center py-32">
+                    <Loader2 className="h-12 w-12 text-orange-600 animate-spin" />
+                    <p className="mt-4 text-gray-500 font-medium">Curating your selection...</p>
+                </div>
+            ) : chefs.length > 0 ? (
+                <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                    {chefs.map((chef) => (
+                        <ChefCard 
+                            key={chef.id} 
+                            chef={{
+                                id: chef.id,
+                                first_name: chef.first_name,
+                                last_name: chef.last_name,
+                                title: chef.brand_name || 'Expert Chef',
+                                avatar_url: chef.avatar_url || 'https://images.unsplash.com/photo-1577219491135-ce391730fbaf?auto=format&fit=crop&w=200&h=200',
+                                cover_url: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&q=80', // Fallback
+                                rating: Number(chef.rating),
+                                review_count: chef.review_count,
+                                location: chef.city,
+                                price_per_guest: chef.menus?.[0]?.price_per_person ? Number(chef.menus[0].price_per_person) : 0,
+                                cuisines: chef.cuisines
+                            }} 
+                        />
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-32 bg-white rounded-[40px] border border-gray-100">
+                    <div className="mx-auto h-24 w-24 bg-gray-50 rounded-full flex items-center justify-center mb-8">
+                        <Search className="h-12 w-12 text-gray-200" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900">No chefs matching your criteria</h2>
+                    <p className="text-gray-500 mt-4 max-w-sm mx-auto font-medium">Try broadening your search or exploring different cuisines.</p>
+                    <Link href="/" className="mt-8 inline-block text-orange-600 font-bold hover:underline">
+                        Return to homepage
+                    </Link>
+                </div>
+            )}
+        </main>
+    )
+}
+
+export default function ChefsPage() {
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
             {/* Navigation */}
@@ -35,56 +119,13 @@ export default async function ChefsPage({
                 </div>
             </nav>
 
-            <main className="max-w-7xl mx-auto px-6 pt-32">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-                    <div>
-                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-orange-600 mb-2">
-                           <MapPin className="h-3 w-3" /> {filters.location || 'All Locations'}
-                        </div>
-                        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
-                            {totalCount} {totalCount === 1 ? 'Chef' : 'Chefs'} found in {filters.location || 'Kenya'}
-                        </h1>
-                    </div>
-                    
-                    <button className="flex items-center gap-2 bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">
-                        <SlidersHorizontal className="h-4 w-4" /> Filters
-                    </button>
+            <Suspense fallback={
+                <div className="flex flex-col items-center justify-center py-32 mt-20">
+                    <Loader2 className="h-12 w-12 text-orange-600 animate-spin" />
                 </div>
-
-                {chefs.length > 0 ? (
-                    <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                        {chefs.map((chef) => (
-                            <ChefCard 
-                                key={chef.id} 
-                                chef={{
-                                    id: chef.id,
-                                    first_name: chef.first_name,
-                                    last_name: chef.last_name,
-                                    title: chef.brand_name || 'Expert Chef',
-                                    avatar_url: chef.avatar_url || 'https://images.unsplash.com/photo-1577219491135-ce391730fbaf?auto=format&fit=crop&w=200&h=200',
-                                    cover_url: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&q=80', // Fallback
-                                    rating: Number(chef.rating),
-                                    review_count: chef.review_count,
-                                    location: chef.city,
-                                    price_per_guest: chef.menus?.[0]?.price_per_person ? Number(chef.menus[0].price_per_person) : 0,
-                                    cuisines: chef.cuisines
-                                }} 
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-32 bg-white rounded-[40px] border border-gray-100">
-                        <div className="mx-auto h-24 w-24 bg-gray-50 rounded-full flex items-center justify-center mb-8">
-                            <Search className="h-12 w-12 text-gray-200" />
-                        </div>
-                        <h2 className="text-2xl font-bold text-gray-900">No chefs matching your criteria</h2>
-                        <p className="text-gray-500 mt-4 max-w-sm mx-auto font-medium">Try broadening your search or exploring different cuisines.</p>
-                        <Link href="/" className="mt-8 inline-block text-orange-600 font-bold hover:underline">
-                            Return to homepage
-                        </Link>
-                    </div>
-                )}
-            </main>
+            }>
+                <ChefsContent />
+            </Suspense>
         </div>
     )
 }

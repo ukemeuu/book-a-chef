@@ -1,27 +1,54 @@
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { createClient } from '@/utils/supabase/client'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChefHat, Calendar, MessageSquare, Briefcase, Settings, ArrowUpRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChefHat, Calendar, MessageSquare, Briefcase, Settings, ArrowUpRight, Loader2 } from 'lucide-react'
 
-export default async function ChefDashboard() {
+export default function ChefDashboard() {
+    const router = useRouter()
+    const [user, setUser] = useState<any>(null)
+    const [profile, setProfile] = useState<any>(null)
+    const [chef, setChef] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) {
-        redirect('/login')
+    useEffect(() => {
+        const checkUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) {
+                router.push('/login')
+                return
+            }
+            setUser(user)
+
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single()
+            setProfile(profile)
+
+            const { data: chef } = await supabase
+                .from('chefs')
+                .select('*')
+                .eq('id', user.id)
+                .single()
+            setChef(chef)
+            
+            setLoading(false)
+        }
+        checkUser()
+    }, [router, supabase])
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <Loader2 className="h-10 w-10 text-orange-600 animate-spin" />
+            </div>
+        )
     }
-
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-    const { data: chef } = await supabase
-        .from('chefs')
-        .select('*')
-        .eq('id', user.id)
-        .single()
 
     return (
         <div className="min-h-screen bg-gray-50 flex">

@@ -1,6 +1,4 @@
-'use server'
-
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/utils/supabase/client'
 import { Chef, Menu } from '@/types'
 
 /**
@@ -23,8 +21,7 @@ export interface ChefSearchResult {
 }
 
 /**
- * Server Action to filter Chefs.
- * Utilizes the GIN index on `cuisines` and btree on `city` & `rating`.
+ * Utility to filter Chefs via Supabase Client.
  */
 export async function searchChefs(filters: ChefFilterState): Promise<ChefSearchResult> {
     const supabase = createClient()

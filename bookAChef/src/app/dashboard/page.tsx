@@ -1,21 +1,45 @@
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { createClient } from '@/utils/supabase/client'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Calendar, MessageSquare, Heart, Settings, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Calendar, MessageSquare, Heart, Settings, User, Loader2 } from 'lucide-react'
 
-export default async function CustomerDashboard() {
+export default function CustomerDashboard() {
+    const router = useRouter()
+    const [user, setUser] = useState<any>(null)
+    const [profile, setProfile] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) {
-        redirect('/login')
+    useEffect(() => {
+        const checkUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) {
+                router.push('/login')
+                return
+            }
+            setUser(user)
+
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single()
+            setProfile(profile)
+            setLoading(false)
+        }
+        checkUser()
+    }, [router, supabase])
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <Loader2 className="h-10 w-10 text-orange-600 animate-spin" />
+            </div>
+        )
     }
-
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
 
     return (
         <div className="min-h-screen bg-gray-50 flex">
@@ -43,7 +67,7 @@ export default async function CustomerDashboard() {
                 <div className="p-4 border-t border-gray-50">
                     <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-gray-50">
                         <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-black">
-                            {profile?.first_name?.[0] || user.email?.[0].toUpperCase()}
+                            {profile?.first_name?.[0] || user?.email?.[0].toUpperCase()}
                         </div>
                         <div className="flex-1 overflow-hidden">
                             <p className="text-sm font-bold text-gray-900 truncate">{profile?.first_name} {profile?.last_name}</p>
