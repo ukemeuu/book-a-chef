@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import { createClient } from "@/utils/supabase/client";
 import {
-  MapPin, Calendar, Users, Utensils, ChefHat, ArrowRight, Clock,
-  Home, Truck, Sparkles, Phone, Mail, ShoppingBag, CheckCircle2, Loader2,
+  MapPin, Calendar, Users, ChefHat, ArrowRight, Clock,
+  Home, Truck, Phone, Mail, Loader2, Check,
 } from "lucide-react";
 
 const CUISINE_OPTIONS = [
@@ -48,6 +49,23 @@ function RequestChefContent() {
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [authChecked, setAuthChecked] = useState(false);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        const params = new URLSearchParams(window.location.search);
+        const redirectUrl = params.toString() ? `/request?${params.toString()}` : "/request";
+        window.location.href = `/login?redirect=${encodeURIComponent(redirectUrl)}`;
+      } else {
+        setAuthChecked(true);
+      }
+    }
+    checkAuth();
+  }, []);
 
   const [date, setDate] = useState(qDate || "");
   const [time, setTime] = useState("19:00 (Dinner)");
@@ -55,7 +73,7 @@ function RequestChefContent() {
   const [location, setLocation] = useState(
     qLocation
       ? LOCATIONS.find((l) => l.toLowerCase().includes(qLocation.toLowerCase())) || qLocation
-      : "Nairobi – Westlands"
+      : ""
   );
   const [serviceFormat, setServiceFormat] = useState("in_home");
   const [cuisine, setCuisine] = useState(
@@ -84,19 +102,18 @@ function RequestChefContent() {
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
-    if (!date) newErrors.date = "Please select a date";
-    if (!location) newErrors.location = "Please select a location";
-    if (!cuisine) newErrors.cuisine = "Please select a cuisine";
-    if (!name.trim()) newErrors.name = "Please enter your name";
-    if (!phone.trim()) newErrors.phone = "Please enter your WhatsApp number";
-    if (!effectiveBudget || parseInt(effectiveBudget) <= 0) newErrors.budget = "Please enter a budget";
+    if (!date) newErrors.date = "Required";
+    if (!location) newErrors.location = "Required";
+    if (!cuisine) newErrors.cuisine = "Required";
+    if (!name.trim()) newErrors.name = "Required";
+    if (!phone.trim()) newErrors.phone = "Required";
+    if (!effectiveBudget || parseInt(effectiveBudget) <= 0) newErrors.budget = "Required";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
 
   async function handleSubmit() {
     if (!validate()) {
-      // Scroll to first error
       const firstError = document.querySelector("[data-error]");
       firstError?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -144,200 +161,363 @@ function RequestChefContent() {
   }
 
   const inputClass =
-    "w-full bg-forest-900 border-2 border-forest-700 rounded-2xl px-4 py-3.5 text-sm font-medium text-white placeholder-forest-500 focus:border-champagne-400 focus:outline-none transition-colors";
-  const labelClass = "block text-xs font-black uppercase tracking-wider text-forest-400 mb-2";
-  const errorClass = "text-red-400 text-xs mt-1";
+    "w-full px-4 py-3 rounded-xl bg-white border border-forest-200 text-sm font-medium text-forest-950 placeholder-forest-400 outline-none focus:border-forest-950 focus:ring-1 focus:ring-forest-950 transition-colors";
+  const labelClass = "block text-sm font-medium text-forest-950 mb-2";
+  const errorClass = "text-red-500 text-xs mt-1";
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-cream-50 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 text-forest-950 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-forest-950 text-white font-sans flex flex-col">
+    <div className="min-h-screen bg-cream-50 text-forest-950 font-sans">
       <Navbar />
 
-      <main className="flex-1 flex flex-col items-center px-4 pt-24 pb-20">
-        <div className="w-full max-w-lg">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-champagne-400/10 border border-champagne-400/20 text-xs font-bold text-champagne-300 mb-4">
-              <Sparkles className="h-3 w-3" /> On-Demand Chef Dispatch
-            </div>
-            <h1 className="font-serif text-3xl sm:text-4xl font-black text-white mb-2">
-              Request a Private Chef
-            </h1>
-            <p className="text-sm text-forest-300">
-              Tell us what you need — we'll match you with the perfect chef.
-            </p>
-          </div>
+      <main className="max-w-2xl mx-auto px-4 pt-24 pb-16">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+            Request a chef
+          </h1>
+          <p className="mt-2 text-forest-500">
+            Tell us what you need. We&apos;ll handle the rest.
+          </p>
+        </div>
 
-          {/* Form */}
-          <div className="space-y-5">
-            {/* Event Details */}
-            <div className="bg-forest-900/50 border border-forest-800 rounded-2xl p-5 space-y-4">
-              <p className="text-xs font-black uppercase tracking-wider text-champagne-300">Event Details</p>
+        <div className="space-y-6">
+          {/* Event Details */}
+          <section className="bg-white rounded-2xl border border-forest-100 p-6 space-y-5">
+            <h2 className="text-lg font-bold text-forest-950">Event details</h2>
 
-              {/* Dining Style */}
-              <div>
-                <label className={labelClass}>Dining Style</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setServiceFormat("in_home")} className={"p-3 rounded-xl border-2 text-left transition-all " + (serviceFormat === "in_home" ? "border-champagne-400 bg-champagne-400/10" : "border-forest-700 bg-forest-900")}>
-                    <Home className={"h-4 w-4 mb-1 " + (serviceFormat === "in_home" ? "text-champagne-400" : "text-forest-400")} />
-                    <span className="text-xs font-bold block text-forest-200">Chef Cooks at Your Home</span>
-                  </button>
-                  <button type="button" onClick={() => setServiceFormat("delivery")} className={"p-3 rounded-xl border-2 text-left transition-all " + (serviceFormat === "delivery" ? "border-champagne-400 bg-champagne-400/10" : "border-forest-700 bg-forest-900")}>
-                    <Truck className={"h-4 w-4 mb-1 " + (serviceFormat === "delivery" ? "text-champagne-400" : "text-forest-400")} />
-                    <span className="text-xs font-bold block text-forest-200">Fresh Prepared Delivery</span>
-                  </button>
-                </div>
+            {/* Dining Style */}
+            <div>
+              <label className={labelClass}>Dining style</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setServiceFormat("in_home")}
+                  className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                    serviceFormat === "in_home"
+                      ? "border-forest-950 bg-forest-950 text-white"
+                      : "border-forest-200 hover:border-forest-400"
+                  }`}
+                >
+                  <Home className={`h-5 w-5 ${serviceFormat === "in_home" ? "text-champagne-400" : "text-forest-500"}`} />
+                  <div>
+                    <span className={`block text-sm font-bold ${serviceFormat === "in_home" ? "text-white" : "text-forest-950"}`}>
+                      Chef cooks at home
+                    </span>
+                    <span className={`text-xs ${serviceFormat === "in_home" ? "text-cream-200" : "text-forest-500"}`}>
+                      In-home dining
+                    </span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setServiceFormat("delivery")}
+                  className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                    serviceFormat === "delivery"
+                      ? "border-forest-950 bg-forest-950 text-white"
+                      : "border-forest-200 hover:border-forest-400"
+                  }`}
+                >
+                  <Truck className={`h-5 w-5 ${serviceFormat === "delivery" ? "text-champagne-400" : "text-forest-500"}`} />
+                  <div>
+                    <span className={`block text-sm font-bold ${serviceFormat === "delivery" ? "text-white" : "text-forest-950"}`}>
+                      Cooked & delivered
+                    </span>
+                    <span className={`text-xs ${serviceFormat === "delivery" ? "text-cream-200" : "text-forest-500"}`}>
+                      Drop-off
+                    </span>
+                  </div>
+                </button>
               </div>
+            </div>
 
-              {/* Date */}
+            {/* Date + Time */}
+            <div className="grid grid-cols-2 gap-4">
               <div data-error={errors.date || undefined}>
-                <label className={labelClass}><Calendar className="h-3 w-3 inline mr-1.5" />Event Date *</label>
-                <input type="date" min={minDateStr} value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+                <label className={labelClass}>Date</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-forest-400" />
+                  <input
+                    type="date"
+                    min={minDateStr}
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className={inputClass + " pl-10"}
+                  />
+                </div>
                 {errors.date && <p className={errorClass}>{errors.date}</p>}
               </div>
-
-              {/* Time */}
               <div>
-                <label className={labelClass}><Clock className="h-3 w-3 inline mr-1.5" />Start Time</label>
-                <select value={time} onChange={(e) => setTime(e.target.value)} className={inputClass}>
-                  {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <label className={labelClass}>Time</label>
+                <div className="relative">
+                  <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-forest-400" />
+                  <select
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className={inputClass + " pl-10 appearance-none"}
+                  >
+                    {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
               </div>
+            </div>
 
-              {/* Location */}
-              <div data-error={errors.location || undefined}>
-                <label className={labelClass}><MapPin className="h-3 w-3 inline mr-1.5" />Location *</label>
-                <select value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass}>
+            {/* Location */}
+            <div data-error={errors.location || undefined}>
+              <label className={labelClass}>Location</label>
+              <div className="relative">
+                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-forest-400" />
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className={inputClass + " pl-10 appearance-none"}
+                >
+                  <option value="">Select location</option>
                   {LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}
                 </select>
-                {errors.location && <p className={errorClass}>{errors.location}</p>}
               </div>
+              {errors.location && <p className={errorClass}>{errors.location}</p>}
+            </div>
 
-              {/* Guests */}
-              <div>
-                <label className={labelClass}><Users className="h-3 w-3 inline mr-1.5" />Number of Guests</label>
-                <div className="flex items-center gap-4 bg-forest-900 border-2 border-forest-700 rounded-2xl px-4 py-3">
-                  <button type="button" onClick={() => setGuests(Math.max(2, guests - 1))} className="w-8 h-8 rounded-full bg-forest-800 text-white font-black text-lg flex items-center justify-center hover:bg-forest-700">−</button>
-                  <span className="flex-1 text-center text-2xl font-black text-white">{guests}</span>
-                  <button type="button" onClick={() => setGuests(Math.min(80, guests + 1))} className="w-8 h-8 rounded-full bg-champagne-400 text-forest-950 font-black text-lg flex items-center justify-center hover:bg-champagne-300">+</button>
-                </div>
-                <p className="text-xs text-forest-500 mt-1 text-center">Minimum 2 guests</p>
+            {/* Guests */}
+            <div>
+              <label className={labelClass}>Guests</label>
+              <div className="flex items-center justify-between bg-white border border-forest-200 rounded-xl px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setGuests(Math.max(2, guests - 1))}
+                  className="w-8 h-8 rounded-full border border-forest-200 flex items-center justify-center text-forest-600 hover:border-forest-400 transition-colors"
+                >
+                  −
+                </button>
+                <span className="text-lg font-bold text-forest-950">{guests}</span>
+                <button
+                  type="button"
+                  onClick={() => setGuests(Math.min(80, guests + 1))}
+                  className="w-8 h-8 rounded-full border border-forest-200 flex items-center justify-center text-forest-600 hover:border-forest-400 transition-colors"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Cuisine & Budget */}
+          <section className="bg-white rounded-2xl border border-forest-100 p-6 space-y-5">
+            <h2 className="text-lg font-bold text-forest-950">Cuisine & budget</h2>
+
+            {/* Cuisine */}
+            <div data-error={errors.cuisine || undefined}>
+              <label className={labelClass}>Cuisine</label>
+              <div className="grid grid-cols-3 gap-2">
+                {CUISINE_OPTIONS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCuisine(c.id)}
+                    className={`p-3 rounded-xl border-2 text-center transition-all ${
+                      cuisine === c.id
+                        ? "border-forest-950 bg-forest-950 text-white"
+                        : "border-forest-200 hover:border-forest-400"
+                    }`}
+                  >
+                    <span className="text-xl block mb-1">{c.icon}</span>
+                    <span className={`text-xs font-medium ${cuisine === c.id ? "text-cream-200" : "text-forest-700"}`}>
+                      {c.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {errors.cuisine && <p className={errorClass}>{errors.cuisine}</p>}
+            </div>
+
+            {/* Sourcing */}
+            <div>
+              <label className={labelClass}>Ingredient sourcing</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSourcing("chef_sourced")}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    sourcing === "chef_sourced"
+                      ? "border-forest-950 bg-forest-950 text-white"
+                      : "border-forest-200 hover:border-forest-400"
+                  }`}
+                >
+                  <span className={`block text-sm font-bold ${sourcing === "chef_sourced" ? "text-white" : "text-forest-950"}`}>
+                    Chef shops
+                  </span>
+                  <span className={`text-xs ${sourcing === "chef_sourced" ? "text-cream-200" : "text-forest-500"}`}>
+                    0% markup, receipts at cost
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSourcing("client_sourced")}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    sourcing === "client_sourced"
+                      ? "border-forest-950 bg-forest-950 text-white"
+                      : "border-forest-200 hover:border-forest-400"
+                  }`}
+                >
+                  <span className={`block text-sm font-bold ${sourcing === "client_sourced" ? "text-white" : "text-forest-950"}`}>
+                    I&apos;ll provide
+                  </span>
+                  <span className={`text-xs ${sourcing === "client_sourced" ? "text-cream-200" : "text-forest-500"}`}>
+                    You supply ingredients
+                  </span>
+                </button>
               </div>
             </div>
 
-            {/* Cuisine & Preferences */}
-            <div className="bg-forest-900/50 border border-forest-800 rounded-2xl p-5 space-y-4">
-              <p className="text-xs font-black uppercase tracking-wider text-champagne-300">Cuisine & Preferences</p>
-
-              {/* Cuisine */}
-              <div data-error={errors.cuisine || undefined}>
-                <label className={labelClass}>Cuisine Type *</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {CUISINE_OPTIONS.map((c) => (
-                    <button key={c.id} type="button" onClick={() => setCuisine(c.id)} className={"p-3 rounded-xl border-2 text-center transition-all " + (cuisine === c.id ? "border-champagne-400 bg-champagne-400/10" : "border-forest-700 bg-forest-900")}>
-                      <span className="text-xl block mb-1">{c.icon}</span>
-                      <span className="text-xs font-bold leading-tight text-forest-200">{c.label}</span>
-                    </button>
-                  ))}
-                </div>
-                {errors.cuisine && <p className={errorClass}>{errors.cuisine}</p>}
-              </div>
-
-              {/* Sourcing */}
-              <div>
-                <label className={labelClass}>Ingredient Sourcing</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setSourcing("chef_sourced")} className={"p-3 rounded-xl border-2 text-left transition-all " + (sourcing === "chef_sourced" ? "border-champagne-400 bg-champagne-400/10" : "border-forest-700 bg-forest-900")}>
-                    <ChefHat className={"h-4 w-4 mb-1 " + (sourcing === "chef_sourced" ? "text-champagne-400" : "text-forest-400")} />
-                    <span className="text-xs font-bold block text-forest-200">Chef shops (0% markup)</span>
+            {/* Budget */}
+            <div data-error={errors.budget || undefined}>
+              <label className={labelClass}>Budget per person (KES)</label>
+              <div className="grid grid-cols-3 gap-2">
+                {BUDGET_OPTIONS.map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => { setBudget(b); setCustomBudget(""); }}
+                    className={`py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                      budget === b
+                        ? "border-forest-950 bg-forest-950 text-white"
+                        : "border-forest-200 hover:border-forest-400 text-forest-700"
+                    }`}
+                  >
+                    {parseInt(b).toLocaleString()}
                   </button>
-                  <button type="button" onClick={() => setSourcing("client_sourced")} className={"p-3 rounded-xl border-2 text-left transition-all " + (sourcing === "client_sourced" ? "border-champagne-400 bg-champagne-400/10" : "border-forest-700 bg-forest-900")}>
-                    <ShoppingBag className={"h-4 w-4 mb-1 " + (sourcing === "client_sourced" ? "text-champagne-400" : "text-forest-400")} />
-                    <span className="text-xs font-bold block text-forest-200">{"I'll provide ingredients"}</span>
-                  </button>
-                </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setBudget("")}
+                  className={`py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                    budget === ""
+                      ? "border-forest-950 bg-forest-950 text-white"
+                      : "border-forest-200 hover:border-forest-400 text-forest-700"
+                  }`}
+                >
+                  Custom
+                </button>
               </div>
-
-              {/* Budget */}
-              <div data-error={errors.budget || undefined}>
-                <label className={labelClass}>Budget per Person (KES) *</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {BUDGET_OPTIONS.map((b) => (
-                    <button key={b} type="button" onClick={() => { setBudget(b); setCustomBudget(""); }} className={"py-2.5 rounded-xl border text-xs font-bold transition-all " + (budget === b ? "border-champagne-400 bg-champagne-400/10 text-champagne-300" : "border-forest-700 bg-forest-900 text-forest-300")}>
-                      KES {parseInt(b).toLocaleString()}
-                    </button>
-                  ))}
-                  <button type="button" onClick={() => setBudget("")} className={"py-2.5 rounded-xl border text-xs font-bold transition-all " + (budget === "" ? "border-champagne-400 bg-champagne-400/10 text-champagne-300" : "border-forest-700 bg-forest-900 text-forest-300")}>
-                    Custom
-                  </button>
-                </div>
-                {budget === "" && (
-                  <input type="number" placeholder="Enter budget per person…" value={customBudget} onChange={(e) => setCustomBudget(e.target.value)} className={inputClass + " mt-2"} />
-                )}
-                {errors.budget && <p className={errorClass}>{errors.budget}</p>}
-              </div>
-
-              {/* Dietary */}
-              <div>
-                <label className={labelClass}>Dietary Requirements</label>
-                <input type="text" placeholder="e.g. Halal, Vegan, Nut allergy…" value={dietary} onChange={(e) => setDietary(e.target.value)} className={inputClass} />
-              </div>
-
-              {/* Special Requests */}
-              <div>
-                <label className={labelClass}>Special Requests</label>
-                <textarea rows={2} placeholder="Themed dinner, live cooking station, décor, etc." value={specialRequests} onChange={(e) => setSpecialRequests(e.target.value)} className={inputClass + " resize-none"} />
-              </div>
+              {budget === "" && (
+                <input
+                  type="number"
+                  placeholder="Enter amount"
+                  value={customBudget}
+                  onChange={(e) => setCustomBudget(e.target.value)}
+                  className={inputClass + " mt-2"}
+                />
+              )}
+              {errors.budget && <p className={errorClass}>{errors.budget}</p>}
             </div>
 
-            {/* Contact */}
-            <div className="bg-forest-900/50 border border-forest-800 rounded-2xl p-5 space-y-4">
-              <p className="text-xs font-black uppercase tracking-wider text-champagne-300">Your Details</p>
-
-              <div data-error={errors.name || undefined}>
-                <label className={labelClass}>Full Name *</label>
-                <input type="text" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
-                {errors.name && <p className={errorClass}>{errors.name}</p>}
-              </div>
-
-              <div data-error={errors.phone || undefined}>
-                <label className={labelClass}><Phone className="h-3 w-3 inline mr-1" />WhatsApp Number *</label>
-                <input type="tel" placeholder="0712 345 678" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
-                {errors.phone && <p className={errorClass}>{errors.phone}</p>}
-              </div>
-
-              <div>
-                <label className={labelClass}><Mail className="h-3 w-3 inline mr-1" />Email Address</label>
-                <input type="email" placeholder="you@email.com (optional)" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
-              </div>
+            {/* Dietary */}
+            <div>
+              <label className={labelClass}>Dietary requirements</label>
+              <input
+                type="text"
+                placeholder="e.g. Halal, Vegan, Nut allergy…"
+                value={dietary}
+                onChange={(e) => setDietary(e.target.value)}
+                className={inputClass}
+              />
             </div>
 
-            {/* Submit Error */}
-            {errors.submit && (
-              <div className="bg-red-900/30 border border-red-800 rounded-2xl p-4 text-sm text-red-300 text-center">
-                {errors.submit}
+            {/* Special Requests */}
+            <div>
+              <label className={labelClass}>Special requests</label>
+              <textarea
+                rows={2}
+                placeholder="Themed dinner, live cooking station, décor…"
+                value={specialRequests}
+                onChange={(e) => setSpecialRequests(e.target.value)}
+                className={inputClass + " resize-none"}
+              />
+            </div>
+          </section>
+
+          {/* Contact */}
+          <section className="bg-white rounded-2xl border border-forest-100 p-6 space-y-5">
+            <h2 className="text-lg font-bold text-forest-950">Your details</h2>
+
+            <div data-error={errors.name || undefined}>
+              <label className={labelClass}>Full name</label>
+              <input
+                type="text"
+                placeholder="Your full name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputClass}
+              />
+              {errors.name && <p className={errorClass}>{errors.name}</p>}
+            </div>
+
+            <div data-error={errors.phone || undefined}>
+              <label className={labelClass}>WhatsApp number</label>
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-forest-400" />
+                <input
+                  type="tel"
+                  placeholder="0712 345 678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className={inputClass + " pl-10"}
+                />
               </div>
+              {errors.phone && <p className={errorClass}>{errors.phone}</p>}
+            </div>
+
+            <div>
+              <label className={labelClass}>Email (optional)</label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-forest-400" />
+                <input
+                  type="email"
+                  placeholder="you@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass + " pl-10"}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Submit Error */}
+          {errors.submit && (
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
+              {errors.submit}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            disabled={submitting}
+            onClick={handleSubmit}
+            className="w-full py-4 rounded-xl bg-forest-950 text-white font-bold text-sm hover:bg-forest-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                Request a Chef
+                <ArrowRight className="h-4 w-4" />
+              </>
             )}
+          </button>
 
-            {/* Submit */}
-            <button
-              disabled={submitting}
-              onClick={handleSubmit}
-              className={"w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 " +
-                (submitting
-                  ? "bg-forest-800 text-forest-500 cursor-not-allowed"
-                  : "bg-champagne-400 text-forest-950 hover:bg-champagne-300 shadow-lg shadow-champagne-400/20")
-              }
-            >
-              {submitting
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</>
-                : <><ChefHat className="h-4 w-4" /> Request a Chef <ArrowRight className="h-4 w-4" /></>
-              }
-            </button>
-
-            <p className="text-xs text-forest-500 text-center leading-relaxed">
-              By requesting a chef you agree to our <a href="/terms" className="text-champagne-400 underline">Terms of Service</a>. We will reach out via WhatsApp to confirm your chef match.
-            </p>
-          </div>
+          <p className="text-xs text-forest-400 text-center">
+            By requesting a chef you agree to our{" "}
+            <a href="/terms" className="underline hover:text-forest-950">Terms of Service</a>.
+            {" "}We&apos;ll reach out via WhatsApp to confirm your match.
+          </p>
         </div>
       </main>
     </div>
@@ -348,8 +528,8 @@ export default function RequestChefPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-forest-950 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full border-2 border-champagne-400 border-t-transparent animate-spin" />
+        <div className="min-h-screen bg-cream-50 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 text-forest-950 animate-spin" />
         </div>
       }
     >

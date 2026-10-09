@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { parseSTKCallback } from "@/utils/mpesa";
+import { notifyPaymentReceived } from "@/utils/whatsapp-notify";
 import { createClient } from "@supabase/supabase-js";
 
 // Use service role to bypass RLS for payment processing
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
       // Create notification for client
       const { data: booking } = await supabase
         .from("bookings")
-        .select("client_id, chef_id, booking_date, chefs(name)")
+        .select("client_id, client_name, client_phone, chef_id, booking_date, chefs(name)")
         .eq("id", existingPayment.booking_id)
         .single();
 
@@ -125,6 +126,31 @@ export async function POST(request: NextRequest) {
           },
         },
       ]);
+
+      // Notify the customer their payment landed and the booking is confirmed.
+      // Fire-and-forget: the callback must return 200 to Safaricom regardless.
+      if (booking?.client_phone) {
+        const paidRef =
+          String(existingPayment.booking_id).length > 8
+            ? String(existingPayment.booking_id).slice(0, 8).toUpperCase()
+            : String(existingPayment.booking_id);
+
+        notifyPaymentReceived(
+          {
+            supabase,
+            bookingId: existingPayment.booking_id,
+            reference: paidRef,
+            customerName: String(booking.client_name || "there"),
+            customerPhone: String(booking.client_phone),
+          },
+          {
+            amount: callback.amount || 0,
+            receiptNumber: callback.mpesaReceiptNumber || null,
+          }
+        ).catch((err) =>
+          console.warn("[mpesa/callback] Payment notification failed:", err)
+        );
+      }
 
       console.log("[mpesa/callback] Payment confirmed:", callback.mpesaReceiptNumber);
     } else {

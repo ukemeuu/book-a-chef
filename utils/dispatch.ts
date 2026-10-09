@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { notifyChefOfNewRequest } from "@/utils/whatsapp-notify";
 
 /**
  * Shared dispatch matching logic.
@@ -136,7 +137,7 @@ export async function matchChefToBooking(supabase: ReturnType<typeof createClien
     },
   ]);
 
-  // 6. Notify the chef
+  // 6. Notify the chef (in-app) and over WhatsApp
   if (best.chef.user_id) {
     await supabase.from("notifications").insert([
       {
@@ -148,6 +149,24 @@ export async function matchChefToBooking(supabase: ReturnType<typeof createClien
         entity_id: bookingId,
       },
     ]);
+  }
+
+  if (best.chef.phone) {
+    const ref = bookingId.length > 8 ? bookingId.slice(0, 8).toUpperCase() : bookingId;
+    await notifyChefOfNewRequest({
+      supabase,
+      bookingId,
+      reference: ref,
+      chefName: best.chef.name,
+      chefPhone: best.chef.phone,
+      details: {
+        date: String(booking.booking_date),
+        guests: Number(booking.guests_count || 0),
+        location: String(booking.location_address || booking.location_city || "Nairobi"),
+        cuisine: String(booking.cuisine_type || "Any"),
+        payout: Math.round(Number(booking.total_price || 0) * 0.85),
+      },
+    });
   }
 
   return {

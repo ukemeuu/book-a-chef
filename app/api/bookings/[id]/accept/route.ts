@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { notifyChefAccepted, buildHandoffLink } from "@/utils/whatsapp-notify";
 
 export async function POST(
   request: NextRequest,
@@ -132,8 +133,27 @@ export async function POST(
 
     // 7. Generate WhatsApp handoff link for the client
     const cleanRef = bookingId.length > 8 ? bookingId.slice(0, 8).toUpperCase() : bookingId;
-    const whatsappMessage = `Hi Book A Chef Concierge! ${chefName} has accepted my booking for ${booking.booking_date} (Ref: #${cleanRef}). I'd like to confirm and discuss the next steps!`;
-    const whatsappUrl = `https://wa.me/254786530713?text=${encodeURIComponent(whatsappMessage)}`;
+    const whatsappUrl = buildHandoffLink(cleanRef, chefName, String(booking.booking_date));
+
+    // 8. Notify the customer over WhatsApp (fire-and-forget — a failed
+    //    notification must not roll back a successful acceptance).
+    notifyChefAccepted(
+      {
+        supabase,
+        bookingId,
+        reference: cleanRef,
+        customerName: String(booking.client_name || "there"),
+        customerPhone: String(booking.client_phone || ""),
+      },
+      {
+        chefName,
+        date: String(booking.booking_date),
+        chefPhone: booking.chefs?.phone || null,
+        totalPrice: Number(booking.total_price || 0),
+      }
+    ).catch((err) =>
+      console.warn("[bookings/accept] Acceptance notification failed:", err)
+    );
 
     return NextResponse.json({
       success: true,

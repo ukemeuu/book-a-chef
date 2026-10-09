@@ -210,11 +210,11 @@ export default function ApplyPage() {
       <div className="min-h-screen bg-cream-50 text-forest-950 flex flex-col font-sans">
         <Navbar />
         <main className="flex-1 flex items-center justify-center p-6 pt-32 pb-20">
-          <div className="max-w-xl w-full bg-white rounded-[36px] p-10 sm:p-12 shadow-2xl border border-forest-100 text-center space-y-6">
+          <div className="max-w-xl w-full bg-white rounded-2xl p-10 sm:p-12 border border-forest-100 text-center space-y-6">
             <div className="h-20 w-20 bg-forest-50 text-forest-700 rounded-3xl mx-auto flex items-center justify-center shadow-inner">
               <CheckCircle2 className="h-10 w-10" />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-serif font-bold text-forest-950 tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
               {formData.applicantType === "restaurant" ? "Restaurant Partnership Received!" : "Application Received!"}
             </h1>
             <p className="text-sm text-forest-600 font-medium leading-relaxed">
@@ -264,7 +264,7 @@ export default function ApplyPage() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cream-100 text-[10px] font-black text-forest-700 uppercase tracking-widest mb-3">
                 <ChefHat className="h-3.5 w-3.5" /> Chef Partner Onboarding
               </div>
-              <h1 className="text-3xl sm:text-5xl font-serif font-bold text-forest-950 tracking-tight leading-tight">
+              <h1 className="text-3xl sm:text-5xl font-bold text-forest-950 tracking-tight leading-tight">
                 Launch Your Private <br />
                 <span className="text-champagne-600 italic">Chef Business.</span>
               </h1>
@@ -274,7 +274,7 @@ export default function ApplyPage() {
             </div>
 
             {/* Live Profile Readiness Tracker: 97% Gate to Go Live */}
-            <div className="bg-forest-950 text-cream-100 rounded-3xl p-5 sm:p-6 border border-forest-900 shadow-xl space-y-3">
+            <div className="bg-forest-950 text-cream-100 rounded-3xl p-5 sm:p-6 border border-forest-900 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-champagne-400" />
@@ -307,7 +307,7 @@ export default function ApplyPage() {
             </div>
 
             {/* Progress Bar */}
-            <div className="flex items-center justify-between gap-2 bg-white rounded-2xl p-2.5 shadow-sm border border-forest-100">
+            <div className="flex items-center justify-between gap-2 bg-white rounded-2xl p-2.5 border border-forest-100">
               {[1, 2, 3, 4].map((s) => (
                 <div
                   key={s}
@@ -327,9 +327,9 @@ export default function ApplyPage() {
 
             {/* Step 1: Personal & Brand / Restaurant Details */}
             {step === 1 && (
-              <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-forest-100 space-y-6">
+              <div className="bg-white rounded-2xl p-8 sm:p-10 border border-forest-100 space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <h2 className="font-serif text-xl font-bold text-forest-950">
+                  <h2 className="text-xl font-bold text-forest-950">
                     1. Choose Partner Type
                   </h2>
                   <span className="text-[11px] font-bold text-champagne-600 bg-forest-900 px-3 py-1 rounded-full w-fit">
@@ -671,8 +671,8 @@ export default function ApplyPage() {
 
             {/* Step 2: Cuisines & Dietary */}
             {step === 2 && (
-              <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-forest-100 space-y-6">
-                <h2 className="font-serif text-xl font-bold text-forest-950">
+              <div className="bg-white rounded-2xl p-8 sm:p-10 border border-forest-100 space-y-6">
+                <h2 className="text-xl font-bold text-forest-950">
                   2. Culinary Flavors & Dietary Specialties
                 </h2>
 
@@ -741,8 +741,8 @@ export default function ApplyPage() {
 
             {/* Step 3: Experience & Pricing */}
             {step === 3 && (
-              <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-forest-100 space-y-5">
-                <h2 className="font-serif text-xl font-bold text-forest-950">
+              <div className="bg-white rounded-2xl p-8 sm:p-10 border border-forest-100 space-y-5">
+                <h2 className="text-xl font-bold text-forest-950">
                   3. Experience & Menu Pricing
                 </h2>
 
@@ -810,8 +810,8 @@ export default function ApplyPage() {
 
             {/* Step 4: Bio & Review */}
             {step === 4 && (
-              <div className="bg-white rounded-[32px] p-8 sm:p-10 shadow-sm border border-forest-100 space-y-5">
-                <h2 className="font-serif text-xl font-bold text-forest-950">
+              <div className="bg-white rounded-2xl p-8 sm:p-10 border border-forest-100 space-y-5">
+                <h2 className="text-xl font-bold text-forest-950">
                   4. Chef Biography & Application Review
                 </h2>
 
@@ -859,8 +859,8 @@ export default function ApplyPage() {
           </div>
 
           {/* Right Info Column */}
-          <div className="lg:col-span-5 bg-forest-950 text-cream-100 rounded-[36px] p-8 border border-forest-900 shadow-2xl space-y-6 text-left">
-            <h3 className="font-serif text-2xl font-bold text-white">
+          <div className="lg:col-span-5 bg-forest-950 text-cream-100 rounded-2xl p-8 border border-forest-900 shadow-2xl space-y-6 text-left">
+            <h3 className="text-2xl font-bold text-white">
               Why Partner With Book A Chef?
             </h3>
             <div className="space-y-4 text-xs">

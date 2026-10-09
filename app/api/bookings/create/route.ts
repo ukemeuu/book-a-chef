@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { INITIAL_CHEFS } from "@/utils/data";
 import { matchChefToBooking } from "@/utils/dispatch";
+import { notifyRequestReceived } from "@/utils/whatsapp-notify";
 
 // Concierge Model: Server-side dining inquiry creation.
 // Diners do not need to sign in or create an account.
@@ -167,6 +168,23 @@ export async function POST(request: NextRequest) {
       if (!insertError && newBooking) {
         createdId = newBooking.id;
         bookingRecord = newBooking;
+
+        const cleanRef =
+          createdId.length > 8 ? createdId.slice(0, 8).toUpperCase() : createdId;
+
+        // Notify the customer their request is in (fire-and-forget —
+        // never block or fail the response on a notification error).
+        notifyRequestReceived(
+          { supabase, bookingId: createdId, reference: cleanRef, customerName: client_name.trim(), customerPhone: client_phone.trim() },
+          {
+            date: String(booking_date),
+            guests: numGuests,
+            location: String(location_city || "Nairobi"),
+            cuisine: String(cuisine_type || "Any"),
+          }
+        ).catch((err) =>
+          console.warn("[bookings/create] Request-received notification failed:", err)
+        );
 
         // Trigger dispatch matching (fire-and-forget — don't block response)
         if (!chef_id && bookingStatus === "pending_assignment") {

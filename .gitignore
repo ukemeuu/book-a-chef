@@ -25,6 +25,13 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# deployment bundles — never commit these, they are build artifacts
+*.zip
+bookachef-deploy-*
+
+# agent / tooling config (may contain tokens)
+opencode.json
+
 # vercel
 .vercel
 

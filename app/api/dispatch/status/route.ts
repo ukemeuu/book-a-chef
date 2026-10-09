@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 
+// Reads session cookies for RLS-scoped booking lookup — must never be prerendered.
+export const dynamic = "force-dynamic";
+
 /**
  * Dispatch status endpoint.
  * GET /api/dispatch/status?booking_id=xxx

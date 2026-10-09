@@ -42,7 +42,7 @@ export default function ChefJobsPage() {
               <span>Chef Partner Network • Kenya</span>
             </div>
 
-            <h1 className="font-serif text-4xl sm:text-6xl font-black text-white tracking-tight leading-tight">
+            <h1 className="text-4xl sm:text-6xl text-white tracking-tight leading-tight">
               Cook on Your Own Terms. <br />
               <span className="text-champagne-400 italic">Earn Direct Payouts.</span>
             </h1>
@@ -54,7 +54,7 @@ export default function ChefJobsPage() {
             <div className="flex flex-col sm:flex-row gap-4 pt-2">
               <Link
                 href="/apply"
-                className="px-8 py-4 rounded-2xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 font-black text-xs uppercase tracking-widest text-center shadow-lg transition-all active:scale-95"
+                className="px-8 py-4 rounded-2xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 text-xs uppercase tracking-widest text-center shadow-lg transition-all active:scale-95"
               >
                 Apply as a Private Chef →
               </Link>
@@ -68,12 +68,12 @@ export default function ChefJobsPage() {
           </div>
 
           {/* EARNINGS CALCULATOR */}
-          <div className="lg:col-span-5 bg-white text-forest-950 rounded-[32px] p-6 sm:p-8 shadow-2xl border border-forest-100 space-y-6">
+          <div className="lg:col-span-5 bg-white text-forest-950 rounded-2xl p-6 sm:p-8 shadow-2xl border border-forest-100 space-y-6">
             <div className="border-b border-forest-100 pb-4">
-              <span className="text-[10px] font-black uppercase tracking-widest text-forest-500">
+              <span className="text-[10px] uppercase tracking-widest text-forest-500">
                 Chef Earnings Estimator
               </span>
-              <h3 className="font-serif text-2xl font-bold text-forest-950 mt-1">
+              <h3 className="text-2xl font-bold text-forest-950 mt-1">
                 Estimate Your Monthly Take-Home
               </h3>
             </div>
@@ -129,10 +129,10 @@ export default function ChefJobsPage() {
 
             {/* Total Estimated Payout */}
             <div className="bg-cream-50 rounded-2xl p-5 border border-forest-100 space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-widest text-forest-500">
+              <span className="text-[10px] uppercase tracking-widest text-forest-500">
                 Estimated Net Earnings (After 15% Platform Fee)
               </span>
-              <p className="font-serif text-3xl font-black text-forest-950">
+              <p className="text-3xl text-forest-950">
                 KES {netMonthly.toLocaleString()}
                 <span className="text-xs font-normal text-forest-500"> / month</span>
               </p>
@@ -147,10 +147,10 @@ export default function ChefJobsPage() {
       {/* CHEF PARTNER BENEFITS */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center max-w-2xl mx-auto mb-14 space-y-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-forest-600 px-3 py-1 bg-forest-100 rounded-full">
+          <span className="text-[10px] uppercase tracking-widest text-forest-600 px-3 py-1 bg-forest-100 rounded-full">
             Why Cook With Us
           </span>
-          <h2 className="font-serif text-3xl sm:text-4xl font-bold text-forest-950">
+          <h2 className="text-3xl sm:text-4xl font-bold text-forest-950">
             A Transparent Marketplace for Independent Chefs
           </h2>
         </div>
@@ -175,12 +175,12 @@ export default function ChefJobsPage() {
           ].map((b, i) => (
             <div
               key={i}
-              className="bg-white p-8 rounded-[32px] border border-forest-100 shadow-sm space-y-3"
+              className="bg-white p-8 rounded-2xl border border-forest-100 shadow-sm space-y-3"
             >
               <div className="h-12 w-12 rounded-2xl bg-cream-100 text-forest-900 flex items-center justify-center border border-forest-200">
                 {b.icon}
               </div>
-              <h3 className="font-serif text-lg font-bold text-forest-950">{b.title}</h3>
+              <h3 className="text-lg font-bold text-forest-950">{b.title}</h3>
               <p className="text-xs text-forest-600 leading-relaxed">{b.desc}</p>
             </div>
           ))}
@@ -192,11 +192,11 @@ export default function ChefJobsPage() {
         <div className="max-w-7xl mx-auto space-y-10">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-forest-900 text-white text-[10px] font-black uppercase tracking-wider mb-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-forest-900 text-white text-[10px] uppercase tracking-wider mb-2">
                 <Sparkles className="h-3 w-3 text-champagne-400" />
                 <span>Uber Dispatch Feed</span>
               </div>
-              <h2 className="font-serif text-3xl sm:text-4xl font-bold text-forest-950">
+              <h2 className="text-3xl sm:text-4xl font-bold text-forest-950">
                 Live Dispatched Gigs Awaiting Chefs
               </h2>
               <p className="text-xs text-forest-600 mt-1">
@@ -258,12 +258,12 @@ export default function ChefJobsPage() {
                     <span className="font-mono text-[10px] font-bold text-forest-500 bg-cream-100 px-2 py-0.5 rounded-lg">
                       #{gig.id}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-200">
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-200">
                       {gig.urgency}
                     </span>
                   </div>
 
-                  <h3 className="font-serif text-lg font-bold text-forest-950 leading-snug">
+                  <h3 className="text-lg font-bold text-forest-950 leading-snug">
                     {gig.title}
                   </h3>
 
@@ -286,7 +286,7 @@ export default function ChefJobsPage() {
                 <div className="pt-4 border-t border-forest-100 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-forest-400 block">Net Payout</span>
-                    <strong className="text-base font-black text-forest-950">
+                    <strong className="text-base text-forest-950">
                       {gig.payout}
                     </strong>
                   </div>

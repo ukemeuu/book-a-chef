@@ -510,137 +510,127 @@ export default function AdminPortalPage() {
 
       <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-28 pb-20 flex-1">
         {/* Admin Header */}
-        <div className="bg-forest-950 text-cream-100 rounded-[36px] p-6 sm:p-10 shadow-2xl mb-10 border border-forest-900 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-1 text-left">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-forest-900 text-[10px] font-black uppercase tracking-widest text-champagne-400 border border-forest-800">
-              <Shield className="h-3.5 w-3.5" /> Super Admin Command Center
-            </div>
-            <h1 className="font-serif text-2xl sm:text-4xl font-bold text-white tracking-tight">
-              Book A Chef Management Console
-            </h1>
-            <p className="text-xs text-forest-300">
-              Admin-Only Marketplace Listing Studio & Verification Queue
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
+          <div>
+            <p className="text-xs font-medium text-forest-400 uppercase tracking-wider mb-1">
+              Admin
+            </p>
+            <h1 className="text-3xl font-bold text-forest-950 tracking-tight">Console</h1>
+            <p className="text-forest-500 text-sm mt-1">
+              Dispatch, chef verification, and bookings.
             </p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setIsListingModalOpen(true)}
-              className="px-6 py-3.5 rounded-2xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 text-xs font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all active:scale-95"
-            >
-              <Plus className="h-4 w-4 stroke-[3]" />
-              <span>List New Certified Chef</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setIsListingModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-forest-950 text-white text-sm font-medium hover:bg-forest-800 transition-colors shrink-0"
+          >
+            <Plus className="h-4 w-4" />
+            Add chef
+          </button>
         </div>
 
-        {/* Global Platform KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10 text-left">
-          <div className="bg-white p-6 rounded-3xl border border-forest-100 shadow-sm space-y-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-forest-500">
-              Gross Marketplace Volume
-            </span>
-            <p className="text-2xl sm:text-3xl font-serif font-black text-forest-950">
-              KES {totalGMV.toLocaleString()}
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 text-left">
+          <div className="bg-white rounded-2xl border border-forest-100 p-5">
+            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">GMV</p>
+            <p className="text-xl sm:text-2xl font-bold text-forest-950">
+              {totalGMV.toLocaleString()}
             </p>
-            <p className="text-[11px] text-forest-500 font-medium">Real-time GMV</p>
+            <p className="text-xs text-forest-500 mt-0.5">Bookings value</p>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-forest-100 shadow-sm space-y-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-forest-500">
-              15% Platform Take-Rate
-            </span>
-            <p className="text-2xl sm:text-3xl font-serif font-black text-champagne-700">
-              KES {totalCommission.toLocaleString()}
+          <div className="bg-white rounded-2xl border border-forest-100 p-5">
+            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Commission</p>
+            <p className="text-xl sm:text-2xl font-bold text-forest-950">
+              {totalCommission.toLocaleString()}
             </p>
-            <p className="text-[11px] text-forest-500 font-medium">Escrow deposits</p>
+            <p className="text-xs text-forest-500 mt-0.5">15% take rate</p>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-forest-100 shadow-sm space-y-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-forest-500">
-              Certified Live Chefs
-            </span>
-            <p className="text-2xl sm:text-3xl font-serif font-black text-forest-950">
-              {chefs.length} Chefs
-            </p>
-            <p className="text-[11px] text-forest-500 font-medium">Uniform & Meal-Tasted Vetted</p>
+          <div className="bg-white rounded-2xl border border-forest-100 p-5">
+            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Chefs</p>
+            <p className="text-xl sm:text-2xl font-bold text-forest-950">{chefs.length}</p>
+            <p className="text-xs text-forest-500 mt-0.5">Verified</p>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-forest-100 shadow-sm space-y-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-forest-500">
-              Pending Chef Applications
-            </span>
-            <p className="text-2xl sm:text-3xl font-serif font-black text-amber-600">
-              {applications.filter((a) => a.status === "pending").length} In Queue
+          <div className="bg-white rounded-2xl border border-forest-100 p-5">
+            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Applications</p>
+            <p className="text-xl sm:text-2xl font-bold text-amber-600">
+              {applications.filter((a) => a.status === "pending").length}
             </p>
             <button
               onClick={() => setActiveTab("applications")}
-              className="text-[11px] font-bold text-forest-900 underline"
+              className="text-xs text-forest-500 hover:text-forest-950 transition-colors mt-0.5"
             >
-              Review Candidates →
+              Review →
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 border-b border-forest-100 pb-3 mb-8 overflow-x-auto no-scrollbar">
+        <div className="flex border-b border-forest-100 mb-6 overflow-x-auto">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+            className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === "overview"
-                ? "bg-forest-900 text-white shadow-sm"
-                : "bg-white text-forest-700 hover:bg-forest-50 border border-forest-100"
+                ? "border-forest-950 text-forest-950"
+                : "border-transparent text-forest-500 hover:text-forest-800"
             }`}
           >
             Overview
           </button>
           <button
             onClick={() => setActiveTab("dispatch")}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
               activeTab === "dispatch"
-                ? "bg-forest-900 text-white shadow-sm ring-2 ring-champagne-400"
-                : "bg-white text-forest-700 hover:bg-forest-50 border border-forest-100"
+                ? "border-forest-950 text-forest-950"
+                : "border-transparent text-forest-500 hover:text-forest-800"
             }`}
           >
-            <Sparkles className="h-3.5 w-3.5 text-champagne-500" />
-            <span>Dispatch Console</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-champagne-400 text-forest-950 font-black text-[9px]">
-              {bookings.filter((b) => b.status === "pending_assignment" || b.status === "pending").length}
-            </span>
+            Dispatch
+            {bookings.filter((b) => b.status === "pending_assignment" || b.status === "pending")
+              .length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-champagne-400 text-forest-950 text-[10px] font-bold">
+                {bookings.filter(
+                  (b) => b.status === "pending_assignment" || b.status === "pending"
+                ).length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab("chefs")}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === "chefs"
-                ? "bg-forest-900 text-white shadow-sm"
-                : "bg-white text-forest-700 hover:bg-forest-50 border border-forest-100"
+                ? "border-forest-950 text-forest-950"
+                : "border-transparent text-forest-500 hover:text-forest-800"
             }`}
           >
-            <Award className="h-3.5 w-3.5 text-champagne-400" />
-            <span>Manage Certified Chefs ({chefs.length})</span>
+            Chefs ({chefs.length})
           </button>
           <button
             onClick={() => setActiveTab("applications")}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+            className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
               activeTab === "applications"
-                ? "bg-forest-900 text-white shadow-sm"
-                : "bg-white text-forest-700 hover:bg-forest-50 border border-forest-100"
+                ? "border-forest-950 text-forest-950"
+                : "border-transparent text-forest-500 hover:text-forest-800"
             }`}
           >
-            <span>Inbound Applications</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px]">
-              {applications.filter((a) => a.status === "pending").length}
-            </span>
+            Applications
+            {applications.filter((a) => a.status === "pending").length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                {applications.filter((a) => a.status === "pending").length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab("bookings")}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+            className={`px-1 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === "bookings"
-                ? "bg-forest-900 text-white shadow-sm"
-                : "bg-white text-forest-700 hover:bg-forest-50 border border-forest-100"
+                ? "border-forest-950 text-forest-950"
+                : "border-transparent text-forest-500 hover:text-forest-800"
             }`}
           >
-            All Bookings ({bookings.length})
+            Bookings ({bookings.length})
           </button>
         </div>
 
@@ -720,10 +710,10 @@ export default function AdminPortalPage() {
                 <ArrowUpRight className="h-4 w-4" />
               </button>
               <Link
-                href="/chefs"
+                href="/chef-dashboard"
                 className="w-full py-3.5 px-4 rounded-2xl bg-cream-100 text-forest-900 font-bold text-xs flex items-center justify-between hover:bg-cream-200"
               >
-                <span>View Public Directory</span>
+                <span>View Chef Portal</span>
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
             </div>
