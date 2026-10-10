@@ -13,8 +13,29 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import StatusStepper from "@/components/booking/StatusStepper";
 import { Booking, Menu, INITIAL_CHEFS } from "@/utils/data";
+import { resolveCommission, LEGACY_CHEF_PAYOUT_RATE, CommissionResolution } from "@/utils/commission";
 import { createClient } from "@/utils/supabase/client";
 import { calculateProfileReadiness, ProfileReadinessResult } from "@/utils/profileReadiness";
+
+/**
+ * A job offer addressed to this chef by the dispatch engine.
+ *
+ * Intentionally carries NO customer PII. The chef decides whether to take the
+ * job from the occasion, date, area and budget alone; client name, phone, email
+ * and the full street address are released only after acceptance, via the RLS
+ * path that applies once the booking is genuinely theirs.
+ */
+type JobOffer = {
+  id: string;
+  bookingDate: string;
+  bookingTime: string;
+  guestsCount: number;
+  totalPrice: number;
+  locationArea: string;
+  cuisineType: string;
+  serviceFormat: string;
+  specialRequests?: string;
+};
 
 export default function ChefDashboardPage() {
   const router = useRouter();
@@ -22,6 +43,10 @@ export default function ChefDashboardPage() {
   const [chef, setChef] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"bookings" | "menus" | "settings">("bookings");
   const [bookings, setBookings] = useState<Booking[]>([]);
+  // Jobs the dispatch engine has offered to THIS chef. Deliberately a separate
+  // collection from `bookings`: offers have not been accepted yet, so they carry
+  // no customer contact details and must never render alongside accepted work.
+  const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [underReview, setUnderReview] = useState(false);
 
@@ -37,6 +62,12 @@ export default function ChefDashboardPage() {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [commission, setCommission] = useState<CommissionResolution>({
+    chefPayoutRate: LEGACY_CHEF_PAYOUT_RATE,
+    platformRate: 1 - LEGACY_CHEF_PAYOUT_RATE,
+    source: "legacy",
+    isIndicative: true,
+  });
   const [decliningBookingId, setDecliningBookingId] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
@@ -47,6 +78,10 @@ export default function ChefDashboardPage() {
     async function initChefPortal() {
       setLoading(true);
       try {
+        // Resolve the payout rate first. Falls back to the legacy split, so this
+        // never blocks the dashboard.
+        setCommission(await resolveCommission(supabase as any));
+
         const {
           data: { user },
           error: authErr,
@@ -135,40 +170,51 @@ export default function ChefDashboardPage() {
           }
         }
 
-        // Fetch unassigned dispatch requests
-        const { data: openRequests } = await supabase
-          .from("bookings")
-          .select("*")
-          .eq("status", "pending_assignment")
-          .is("chef_id", null)
-          .order("created_at", { ascending: false })
-          .limit(20);
+        // Job offers addressed to THIS chef.
+        //
+        // Dispatch is a push model: matchChefToBooking() assigns exactly one
+        // eligible chef at a time and sets status = 'assigned'. There is no open
+        // job board, and no query anywhere that enumerates unassigned bookings.
+        //
+        // Two deliberate safeguards:
+        //  1. Filtered to chef_id = this chef, so a chef can never see another
+        //     chef's offers or another customer's request.
+        //  2. Explicit column list rather than `select('*')`, so client_name,
+        //     client_phone, client_email and location_address are never even
+        //     sent to the browser before the chef accepts.
+        //
+        // No SECURITY DEFINER escape hatch is needed: the existing RLS policy
+        // already permits a chef to read bookings whose chef_id maps to their
+        // own chefs.user_id.
+        if (chefId) {
+          const { data: offered } = await supabase
+            .from("bookings")
+            .select(
+              "id, booking_date, booking_time, guests_count, total_price, " +
+                "budget_per_person, location_address, location_city, " +
+                "cuisine_type, service_format, special_requests"
+            )
+            .eq("chef_id", chefId)
+            .eq("status", "assigned")
+            .order("booking_date", { ascending: true })
+            .limit(20);
 
-        if (openRequests && openRequests.length > 0) {
-          const mappedOpen: Booking[] = openRequests.map((b: any) => ({
-            id: b.id,
-            chefId: b.chef_id || "unassigned",
-            chefName: "Open Request",
-            clientName: b.client_name,
-            clientEmail: b.client_email,
-            clientPhone: b.client_phone,
-            menuTitle: b.special_requests || "Custom Request",
-            bookingDate: b.booking_date,
-            bookingTime: b.booking_time,
-            guestsCount: b.guests_count,
-            totalPrice: Number(b.total_price),
-            depositAmount: Number(b.deposit_amount),
-            status: "pending_assignment",
-            address: b.location_address,
-            city: b.location_city || "Nairobi",
-            specialRequests: b.special_requests,
-            serviceFormat: b.service_format || "in_home",
-            sourcingPreference: b.sourcing_preference || "chef_sourced",
-            preferredStores: b.preferred_stores || undefined,
-            receiptVerified: b.receipt_verified ?? false,
-            createdAt: b.created_at,
-          }));
-          setBookings((prev) => [...mappedOpen, ...prev]);
+          setJobOffers(
+            ((offered as any[]) || []).map((b) => ({
+              id: b.id,
+              bookingDate: b.booking_date,
+              bookingTime: b.booking_time,
+              guestsCount: Number(b.guests_count || 0),
+              totalPrice:
+                Number(b.total_price) ||
+                Number(b.budget_per_person || 0) * Number(b.guests_count || 0),
+              // Area only — the full street address is withheld until accept.
+              locationArea: b.location_city || String(b.location_address || "").split(",")[0],
+              cuisineType: b.cuisine_type || "",
+              serviceFormat: b.service_format || "in_home",
+              specialRequests: b.special_requests || "",
+            }))
+          );
         }
       } catch (err) {
         console.error("Chef portal init error:", err);
@@ -186,6 +232,9 @@ export default function ChefDashboardPage() {
       const res = await fetch(`/api/bookings/${bookingId}/accept`, { method: "POST" });
       const data = await res.json();
       if (res.ok && data.success) {
+        // The offer is consumed. It moves into `bookings` as an accepted job
+        // (which is where the full address and client contact become visible).
+        setJobOffers((prev) => prev.filter((o) => o.id !== bookingId));
         setBookings((prev) =>
           prev.map((b) =>
             b.id === bookingId ? { ...b, status: "chef_accepted", chefId: chef?.id || b.chefId } : b
@@ -212,6 +261,7 @@ export default function ChefDashboardPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        setJobOffers((prev) => prev.filter((o) => o.id !== decliningBookingId));
         setBookings((prev) =>
           prev.map((b) =>
             b.id === decliningBookingId
@@ -385,12 +435,16 @@ export default function ChefDashboardPage() {
     );
   }
 
-  const openRequests = bookings.filter((b) => b.status === "pending_assignment");
-  const activeBookings = bookings.filter((b) => b.status !== "pending_assignment");
+  // "assigned" rows are offers awaiting this chef's response and are rendered
+  // from `jobOffers` above, so they are excluded here to avoid double-listing.
+  const activeBookings = bookings.filter((b) => b.status !== "pending_assignment" && b.status !== "assigned");
   const completedBookings = bookings.filter(
     (b) => b.status === "confirmed" || b.status === "completed"
   );
-  const totalEarned = completedBookings.reduce((sum, b) => sum + b.totalPrice * 0.85, 0);
+  const totalEarned = completedBookings.reduce(
+    (sum, b) => sum + b.totalPrice * commission.chefPayoutRate,
+    0
+  );
 
   const inputClass =
     "w-full px-4 py-3 rounded-xl bg-white border border-forest-200 text-sm font-medium text-forest-950 placeholder-forest-400 outline-none focus:border-forest-950 focus:ring-1 focus:ring-forest-950 transition-colors";
@@ -480,8 +534,12 @@ export default function ChefDashboardPage() {
           <div className="bg-white rounded-2xl border border-forest-100 p-4">
             <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">Earnings</p>
             <p className="text-lg sm:text-xl font-bold text-forest-950">
-              KES {Math.round(totalEarned).toLocaleString()}
+              {commission.isIndicative ? "~KES " : "KES "}
+              {Math.round(totalEarned).toLocaleString()}
             </p>
+            {commission.isIndicative && (
+              <p className="text-[10px] text-forest-400 mt-0.5">Estimate — rate pending</p>
+            )}
           </div>
           <div className="bg-white rounded-2xl border border-forest-100 p-4">
             <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">Active</p>
@@ -490,9 +548,11 @@ export default function ChefDashboardPage() {
             </p>
           </div>
           <div className="bg-white rounded-2xl border border-forest-100 p-4">
-            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">Open requests</p>
+            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
+              Awaiting response
+            </p>
             <p className="text-lg sm:text-xl font-bold text-amber-600">
-              {openRequests.length}
+              {jobOffers.length}
             </p>
           </div>
         </div>
@@ -590,39 +650,48 @@ export default function ChefDashboardPage() {
         {/* REQUESTS TAB */}
         {activeTab === "bookings" && (
           <div className="space-y-6">
-            {/* Open requests — dispatch board */}
-            {openRequests.length > 0 && (
+            {/* Job offers addressed to this chef. There is deliberately NO open
+                job board — dispatch is a push model. The system matches one
+                eligible chef at a time and offers the job to them; chefs never
+                browse or claim other customers' requests. */}
+            {jobOffers.length > 0 && (
               <section>
                 <div className="flex items-center gap-2 mb-3">
-                  <h2 className="text-sm font-bold text-forest-950">Available requests</h2>
+                  <h2 className="text-sm font-bold text-forest-950">Offered to you</h2>
                   <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-medium">
-                    {openRequests.length}
+                    {jobOffers.length}
                   </span>
                 </div>
                 <div className="space-y-3">
-                  {openRequests.map((booking) => (
+                  {jobOffers.map((booking) => (
                     <div
                       key={booking.id}
                       className="bg-white rounded-2xl border border-amber-200 p-5"
                     >
                       <div className="flex items-start justify-between gap-4 mb-4">
                         <div>
-                          <p className="font-bold text-forest-950">{booking.clientName}</p>
+                          <p className="font-bold text-forest-950">
+                            {booking.cuisineType
+                              ? `${booking.cuisineType} private dining`
+                              : "Private dining request"}
+                          </p>
                           <p className="text-xs text-forest-500">
                             {booking.bookingDate} at {booking.bookingTime} •{" "}
                             {booking.guestsCount} guests
                           </p>
                         </div>
                         <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-medium shrink-0">
-                          {statusLabel(booking.status)}
+                          Awaiting your response
                         </span>
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
                         <div>
-                          <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">Location</p>
+                          <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
+                            Area
+                          </p>
                           <p className="text-sm font-medium text-forest-950 truncate">
-                            {booking.address}
+                            {booking.locationArea}
                           </p>
                         </div>
                         <div>
@@ -638,8 +707,16 @@ export default function ChefDashboardPage() {
                             Your earnings
                           </p>
                           <p className="text-sm font-bold text-forest-950">
-                            KES {Math.round(booking.totalPrice * 0.85).toLocaleString()}
+                            {commission.isIndicative ? "~KES " : "KES "}
+                            {Math.round(
+                              booking.totalPrice * commission.chefPayoutRate
+                            ).toLocaleString()}
                           </p>
+                          {commission.isIndicative && (
+                            <p className="text-[10px] text-forest-400 mt-0.5">
+                              Estimate — rate pending approval
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -654,7 +731,7 @@ export default function ChefDashboardPage() {
                           onClick={() => setDecliningBookingId(booking.id)}
                           className="px-4 py-2.5 rounded-xl border border-forest-200 text-sm font-medium text-forest-700 hover:bg-cream-50 transition-colors"
                         >
-                          Pass
+                          Decline
                         </button>
                         <button
                           disabled={actionLoading}
@@ -664,7 +741,7 @@ export default function ChefDashboardPage() {
                           {actionLoading ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            "Accept request"
+                            "Accept job"
                           )}
                         </button>
                       </div>
@@ -725,8 +802,16 @@ export default function ChefDashboardPage() {
                             Earnings
                           </p>
                           <p className="text-sm font-bold text-forest-950">
-                            KES {Math.round(booking.totalPrice * 0.85).toLocaleString()}
+                            {commission.isIndicative ? "~KES " : "KES "}
+                            {Math.round(
+                              booking.totalPrice * commission.chefPayoutRate
+                            ).toLocaleString()}
                           </p>
+                          {commission.isIndicative && (
+                            <p className="text-[10px] text-forest-400 mt-0.5">
+                              Estimate — rate pending approval
+                            </p>
+                          )}
                         </div>
                       </div>
 

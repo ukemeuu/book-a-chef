@@ -31,7 +31,13 @@ export async function POST(
       return NextResponse.json({ error: "Booking not found." }, { status: 404 });
     }
 
-    // 3. Verify user is the assigned chef, an admin, or claiming an unassigned booking
+    // 3. Verify the caller is the chef this job was dispatched to, or an admin.
+    //
+    // There is deliberately NO claim path. Dispatch is push: the matching engine
+    // assigns exactly one chef, and only that chef may accept. This endpoint
+    // previously also let any chef claim an unassigned `pending_assignment`
+    // booking by ID, which (a) leaked client PII to whoever guessed the ID and
+    // (b) bypassed the sequential one-chef-at-a-time matching rule.
     const isAssignedChef = booking.chefs?.user_id === user.id;
     const { data: profile } = await supabase
       .from("profiles")
@@ -40,83 +46,86 @@ export async function POST(
       .single();
 
     const isAdmin = profile?.role === "admin";
-    const isChefRole = profile?.role === "chef";
 
-    // Allow claiming unassigned pending_assignment bookings
-    const canClaim = isChefRole && booking.status === "pending_assignment" && !booking.chef_id;
-
-    if (!isAssignedChef && !isAdmin && !canClaim) {
-      return NextResponse.json({ error: "Unauthorized to accept this booking." }, { status: 403 });
+    if (!isAssignedChef && !isAdmin) {
+      return NextResponse.json(
+        { error: "This job was not dispatched to you." },
+        { status: 403 }
+      );
     }
 
-    // For assigned bookings, only allow accepting from "pending" state
-    // For unassigned bookings, only allow claiming from "pending_assignment" state
-    if (isAssignedChef || isAdmin) {
-      if (booking.status !== "pending") {
-        return NextResponse.json(
-          { error: `Booking is currently in '${booking.status}' state and cannot be accepted.` },
-          { status: 400 }
-        );
-      }
-    } else if (canClaim) {
-      if (booking.status !== "pending_assignment") {
-        return NextResponse.json(
-          { error: `Booking is currently in '${booking.status}' state and cannot be claimed.` },
-          { status: 400 }
-        );
-      }
+    // 4. Guard the transition. `assigned` is the state matchChefToBooking() sets
+    // when it dispatches an offer; `pending` is the pre-pivot legacy state for
+    // bookings assigned before the dispatch engine existed.
+    const ACCEPTABLE_FROM = ["assigned", "pending"];
+
+    if (!ACCEPTABLE_FROM.includes(booking.status)) {
+      return NextResponse.json(
+        {
+          error:
+            booking.status === "chef_accepted"
+              ? "You have already accepted this job."
+              : `This job is no longer available (status: ${booking.status}).`,
+        },
+        { status: 409 }
+      );
     }
 
-    // 4. Update status to chef_accepted (and set chef_id if claiming)
-    const updatePayload: Record<string, any> = {
-      status: "chef_accepted",
-      chef_response_at: new Date().toISOString(),
-    };
-
-    if (canClaim) {
-      // Look up the chef record for this user
-      const { data: chefRecord } = await supabase
-        .from("chefs")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (chefRecord) {
-        updatePayload.chef_id = chefRecord.id;
-        updatePayload.assigned_at = new Date().toISOString();
-      }
+    if (!booking.chef_id) {
+      return NextResponse.json(
+        { error: "This job has no chef assigned. It may have been withdrawn." },
+        { status: 409 }
+      );
     }
 
-    const { error: updateErr } = await supabase
+    // 5. Conditional update — this is the B1 race fix.
+    //
+    // The previous version ran `.update(payload).eq("id", bookingId)`, a
+    // read-then-write: two concurrent accepts both read `assigned`, both passed
+    // the guard above, and the second silently overwrote the first's timestamps
+    // while BOTH callers received HTTP 200.
+    //
+    // Folding the expected status into the WHERE clause makes the check and the
+    // write one atomic statement. Exactly one caller can move a row out of
+    // `assigned`; every other caller matches zero rows and gets a 409.
+    //
+    // This works against production as-is and does not depend on migration 03
+    // having been applied. claim_booking() adds the further DB-side layers
+    // (trigger + partial unique index); this is the app-level guard.
+    const expectedStatus = booking.status;
+    const { data: updated, error: updateErr } = await supabase
       .from("bookings")
-      .update(updatePayload)
-      .eq("id", bookingId);
+      .update({
+        status: "chef_accepted",
+        chef_response_at: new Date().toISOString(),
+      })
+      .eq("id", bookingId)
+      .eq("status", expectedStatus)
+      .select("id");
 
     if (updateErr) {
       return NextResponse.json({ error: "Failed to update booking status." }, { status: 500 });
     }
 
-    // 5. Log dispatch if this was a claim
-    if (canClaim) {
-      const { data: chefRecord } = await supabase
-        .from("chefs")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (chefRecord) {
-        await supabase.from("dispatch_log").insert([
-          {
-            booking_id: bookingId,
-            chef_id: chefRecord.id,
-            auto_assigned: false,
-            accepted_at: new Date().toISOString(),
-          },
-        ]);
-      }
+    if (!updated || updated.length === 0) {
+      // Lost the race — another request already moved this booking on.
+      return NextResponse.json(
+        { error: "This job was just taken or updated. Please refresh." },
+        { status: 409 }
+      );
     }
 
-    // 6. Notify client
+    // 6. Record the acceptance in the dispatch log.
+    await supabase.from("dispatch_log").insert([
+      {
+        booking_id: bookingId,
+        chef_id: booking.chef_id,
+        auto_assigned: true,
+        accepted_at: new Date().toISOString(),
+      },
+    ]);
+
+    // 7. Notify client (in-app)
     const chefName = booking.chefs?.name || "A chef";
     if (booking.client_id) {
       await supabase.from("notifications").insert([
@@ -131,11 +140,11 @@ export async function POST(
       ]);
     }
 
-    // 7. Generate WhatsApp handoff link for the client
+    // 8. Generate WhatsApp handoff link for the client
     const cleanRef = bookingId.length > 8 ? bookingId.slice(0, 8).toUpperCase() : bookingId;
     const whatsappUrl = buildHandoffLink(cleanRef, chefName, String(booking.booking_date));
 
-    // 8. Notify the customer over WhatsApp (fire-and-forget — a failed
+    // 9. Notify the customer over WhatsApp (fire-and-forget — a failed
     //    notification must not roll back a successful acceptance).
     notifyChefAccepted(
       {

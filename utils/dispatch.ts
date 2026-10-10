@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { notifyChefOfNewRequest } from "@/utils/whatsapp-notify";
+import { estimateChefPayout } from "@/utils/commission";
 
 /**
  * Shared dispatch matching logic.
@@ -153,6 +154,12 @@ export async function matchChefToBooking(supabase: ReturnType<typeof createClien
 
   if (best.chef.phone) {
     const ref = bookingId.length > 8 ? bookingId.slice(0, 8).toUpperCase() : bookingId;
+    // Payout is indicative until a commission rate is approved and activated
+    // in platform_settings. Never hardcode the split at the call site.
+    const { amount: payout, resolution } = await estimateChefPayout(
+      supabase,
+      Number(booking.total_price || 0)
+    );
     await notifyChefOfNewRequest({
       supabase,
       bookingId,
@@ -164,7 +171,8 @@ export async function matchChefToBooking(supabase: ReturnType<typeof createClien
         guests: Number(booking.guests_count || 0),
         location: String(booking.location_address || booking.location_city || "Nairobi"),
         cuisine: String(booking.cuisine_type || "Any"),
-        payout: Math.round(Number(booking.total_price || 0) * 0.85),
+        payout,
+        payoutIsIndicative: resolution.isIndicative,
       },
     });
   }

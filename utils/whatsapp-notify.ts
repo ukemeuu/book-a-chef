@@ -253,9 +253,23 @@ export async function notifyChefOfNewRequest(params: {
   reference: string;
   chefName: string;
   chefPhone: string;
-  details: { date: string; guests: number; location: string; cuisine: string; payout: number };
+  details: {
+    date: string;
+    guests: number;
+    location: string;
+    cuisine: string;
+    payout: number;
+    /**
+     * True when `payout` came from the legacy 85/15 split because no commission
+     * rate has been approved yet. The message then says "estimated" so a chef
+     * is never shown an unapproved figure as though it were payable.
+     */
+    payoutIsIndicative?: boolean;
+  };
 }) {
   const { supabase, bookingId, reference, chefName, chefPhone, details } = params;
+
+  const payoutLabel = `KES ${details.payout.toLocaleString()}`;
 
   return dispatch(
     {
@@ -272,12 +286,13 @@ export async function notifyChefOfNewRequest(params: {
       details.date,
       String(details.guests),
       details.location,
-      `KES ${details.payout.toLocaleString()}`,
+      payoutLabel,
       reference,
     ],
     `Hi ${chefName}, new ${details.cuisine} request on ${details.date} for ` +
-      `${details.guests} guests in ${details.location}. Payout KES ${details.payout.toLocaleString()}. ` +
-      `Open your dashboard to accept.`
+      `${details.guests} guests in ${details.location}. ` +
+      `Payout ${details.payoutIsIndicative ? "estimated " : ""}${payoutLabel}. ` +
+      `Open your dashboard to accept or decline.`
   );
 }
 
