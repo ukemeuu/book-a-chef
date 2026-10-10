@@ -17,9 +17,15 @@ export default function ChefJobsPage() {
   const [avgGuests, setAvgGuests] = useState(6);
   const [avgPricePerGuest, setAvgPricePerGuest] = useState(4500);
 
-  // Income calculations (honest 85% chef payout after 15% platform fee)
+  // Income estimate.
+  //
+  // The 85/15 split is NOT approved. It is shown here only as an illustration
+  // so the calculator is meaningful, and is labelled as an estimate in the UI.
+  // The live rate lives in platform_settings and must not be asserted publicly
+  // until approved. Do not widen this to a promise.
+  const LEGACY_PAYOUT_RATE = 0.85;
   const grossWeekly = dinnersPerWeek * avgGuests * avgPricePerGuest;
-  const netWeekly = Math.round(grossWeekly * 0.85);
+  const netWeekly = Math.round(grossWeekly * LEGACY_PAYOUT_RATE);
   const netMonthly = netWeekly * 4;
 
   return (
@@ -123,7 +129,7 @@ export default function ChefJobsPage() {
             {/* Total Estimated Payout */}
             <div className="bg-cream-50 rounded-2xl p-5 border border-forest-100 space-y-1">
               <span className="text-[10px] uppercase tracking-widest text-forest-500">
-                Estimated Net Earnings (After 15% Platform Fee)
+                Estimated Take-Home
               </span>
               <p className="text-3xl text-forest-950">
                 KES {netMonthly.toLocaleString()}
@@ -131,6 +137,10 @@ export default function ChefJobsPage() {
               </p>
               <p className="text-[11px] text-forest-500">
                 KES {netWeekly.toLocaleString()} / week from {dinnersPerWeek} dinner service(s)
+              </p>
+              <p className="text-[11px] text-forest-400 pt-1 border-t border-forest-100">
+                Illustration only, assuming the current indicative 85/15 split.
+                Your final platform fee is confirmed in writing at onboarding.
               </p>
             </div>
           </div>

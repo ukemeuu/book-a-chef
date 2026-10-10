@@ -1115,7 +1115,7 @@ export default function AdminPortalPage() {
                       const assignedChefObj = chefs.find((c) => c.id === currentlySelectedChefId || c.id === b.chefId);
 
                       const chefWaMsg = encodeURIComponent(
-                        `Hi Chef ${assignedChefObj?.name || ""}! New private dining dispatch from Book A Chef Kenya.\n\nDate: ${b.bookingDate} at ${b.bookingTime || "19:00"}\nLocation: ${b.address || b.city}\nGuests: ${b.guestsCount}\nTotal Value: KES ${b.totalPrice?.toLocaleString()}\nNotes: ${b.menuTitle || "Standard Menu"}\n\nReview & accept this gig here: https://bookachef.co.ke/chef-jobs`
+                        `Hi Chef ${assignedChefObj?.name || ""}! New private dining dispatch from Book A Chef Kenya.\n\nDate: ${b.bookingDate} at ${b.bookingTime || "19:00"}\nArea: ${b.city || b.address}\nGuests: ${b.guestsCount}\nEstimated payout: KES ${Math.round(Number(b.totalPrice || 0) * 0.85).toLocaleString()}\nNotes: ${b.menuTitle || "Standard Menu"}\n\nThis job has been dispatched to you. Sign in to review and respond: https://bookachef.co.ke/chef-dashboard`
                       );
 
                       const clientWaMsg = encodeURIComponent(
