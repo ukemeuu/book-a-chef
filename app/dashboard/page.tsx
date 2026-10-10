@@ -55,6 +55,26 @@ export default function ClientDashboardPage() {
           return;
         }
 
+        // This is the CUSTOMER surface. Admins and chefs have their own
+        // consoles; showing them a bookings list they have no use for reads
+        // as "no bookings yet", which is misleading. The middleware already
+        // redirects, but client-side nav can render this page without ever
+        // re-running it, so guard here too.
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", authUser.id)
+          .maybeSingle();
+
+        if (profile?.role === "admin") {
+          router.replace("/admin");
+          return;
+        }
+        if (profile?.role === "chef") {
+          router.replace("/chef-dashboard");
+          return;
+        }
+
         setUser(authUser);
         setPaymentPhone(authUser.user_metadata?.phone || "");
 

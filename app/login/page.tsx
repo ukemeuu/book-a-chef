@@ -122,7 +122,23 @@ function LoginForm() {
 
         if (signInData?.session) {
           setSuccessMessage("Account created! Redirecting...");
-          window.location.href = redirectTo || "/dashboard";
+          // Route by role, not to a hardcoded customer dashboard. An admin or
+          // chef who registers here would otherwise be parked on a bookings
+          // page that is not theirs.
+          const { data: newProfile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", signInData.user.id)
+            .maybeSingle();
+
+          const home =
+            newProfile?.role === "admin"
+              ? "/admin"
+              : newProfile?.role === "chef"
+              ? "/chef-dashboard"
+              : redirectTo || "/dashboard";
+
+          window.location.href = home;
           return;
         }
 

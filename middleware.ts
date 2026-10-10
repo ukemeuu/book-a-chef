@@ -43,6 +43,27 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Resolve the caller's role once. Used to route people to the surface that
+  // matches who they are, not just to guard the sensitive ones.
+  //
+  // Returns null when signed out, or when the profile row is missing — the
+  // latter happens if sign-up failed to create one, so callers must treat null
+  // as "unknown" and NOT assume the most privileged role.
+  const getRole = async (): Promise<"client" | "chef" | "admin" | null> => {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const role = profile?.role;
+    return role === "admin" || role === "chef" || role === "client" ? role : null;
+  };
+
+  // Where a user of a given role belongs by default.
+  const homeFor = (role: "client" | "chef" | "admin" | null) =>
+    role === "admin" ? "/admin" : role === "chef" ? "/chef-dashboard" : "/dashboard";
+
   // 1. Admin route protection
   if (pathname.startsWith("/admin")) {
     if (!user) {
@@ -52,14 +73,13 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard?error=unauthorized", request.url));
+    const role = await getRole();
+    if (role !== "admin") {
+      // Send them to their OWN surface, not to a customer dashboard they
+      // cannot use. Preserve the error so the page can explain the refusal.
+      const dest = new URL(homeFor(role), request.url);
+      dest.searchParams.set("error", "unauthorized");
+      return NextResponse.redirect(dest);
     }
     return response;
   }
@@ -72,10 +92,21 @@ export async function middleware(request: NextRequest) {
       loginUrl.searchParams.set("message", "Chef portal authentication required.");
       return NextResponse.redirect(loginUrl);
     }
+    // Admins belong in the dispatch console. Without this an admin could sit in
+    // the chef portal seeing an empty board and think they had no jobs.
+    const role = await getRole();
+    if (role === "admin") {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
     return response;
   }
 
   // 3. Client Dashboard route protection
+  //
+  // Access control alone was not enough: /dashboard only ever checked that a
+  // session existed, so an admin landing here by bookmark, by the "My bookings"
+  // footer link, or via the sign-up fallback stayed on a customer screen
+  // showing "No bookings yet" with no obvious way onward.
   if (pathname.startsWith("/dashboard")) {
     if (!user) {
       const loginUrl = new URL("/login", request.url);
@@ -83,21 +114,17 @@ export async function middleware(request: NextRequest) {
       loginUrl.searchParams.set("message", "Please sign in to view your dining reservations.");
       return NextResponse.redirect(loginUrl);
     }
+    const role = await getRole();
+    if (role === "admin" || role === "chef") {
+      return NextResponse.redirect(new URL(homeFor(role), request.url));
+    }
     return response;
   }
 
   // 4. Login route (if already signed in)
   if (pathname === "/login" && user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    const role = profile?.role;
-    if (role === "admin") return NextResponse.redirect(new URL("/admin", request.url));
-    if (role === "chef") return NextResponse.redirect(new URL("/chef-dashboard", request.url));
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const role = await getRole();
+    return NextResponse.redirect(new URL(homeFor(role), request.url));
   }
 
   return response;
