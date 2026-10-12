@@ -22,8 +22,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env*.local
+# local env files — NEVER commit these.
+# The old `.env*.local` pattern only matched names ENDING in `.local`, so
+# `.env.production` and editor backups like `.env.local.save` slipped through.
+# Anything here can hold SUPABASE_SERVICE_ROLE_KEY, M-Pesa secrets or Resend
+# keys. `.env.example` is the only one that belongs in the repo.
+.env
+.env.*
+!.env.example
 
 # deployment bundles — never commit these, they are build artifacts
 *.zip
