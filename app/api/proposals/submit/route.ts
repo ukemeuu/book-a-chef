@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { PROVISIONAL_DEPOSIT_RATE } from "@/utils/commission";
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,10 +45,19 @@ export async function POST(request: NextRequest) {
       special_requests: `[PROPOSAL REQUEST - ${event_type}] Preferred Cuisines: ${cuisine_preference || "Custom"}. Budget/Guest: KES ${budget_per_guest || "Custom"}. Details: ${additional_details || "N/A"}`,
       dietary_notes: dietary_notes || null,
       total_price: Number(guest_count) * (Number(budget_per_guest) || 4500),
-      deposit_amount: Math.round(Number(guest_count) * (Number(budget_per_guest) || 4500) * 0.15),
+      // Provisional rate — no deposit policy approved yet. Named in
+      // utils/commission.ts so there is one place to change it.
+      deposit_amount: Math.round(
+        Number(guest_count) * (Number(budget_per_guest) || 4500) * PROVISIONAL_DEPOSIT_RATE
+      ),
       status: "pending",
-      // Pick first verified chef or concierge management
-      chef_id: body.chef_id || "c_1",
+      // Only assign when the requester actually chose a chef.
+      //
+      // This previously defaulted to a hardcoded "c_1", so every proposal with
+      // no explicit chef was silently attributed to that chef id — one that may
+      // not exist in production at all. Leaving chef_id null puts the proposal
+      // in the dispatch queue to be matched properly.
+      chef_id: body.chef_id || null,
     };
 
     const { data: booking, error: bErr } = await supabase

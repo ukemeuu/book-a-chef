@@ -39,6 +39,11 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ChefApplication, Booking, Chef, INITIAL_CHEFS } from "@/utils/data";
 import { createClient } from "@/utils/supabase/client";
+import {
+  resolveCommission,
+  LEGACY_CHEF_PAYOUT_RATE,
+  CommissionResolution,
+} from "@/utils/commission";
 
 const ALL_CUISINES = [
   "Swahili",
@@ -73,6 +78,14 @@ export default function AdminPortalPage() {
   const [dispatchFilter, setDispatchFilter] = useState<"all" | "pending" | "assigned" | "active">("all");
   const [selectedChefForBooking, setSelectedChefForBooking] = useState<{ [bookingId: string]: string }>({});
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  // Real platform rate. Stays on the legacy fallback (and flagged indicative)
+  // until an admin approves and activates a rate in platform_settings.
+  const [commission, setCommission] = useState<CommissionResolution>({
+    chefPayoutRate: LEGACY_CHEF_PAYOUT_RATE,
+    platformRate: 1 - LEGACY_CHEF_PAYOUT_RATE,
+    source: "legacy",
+    isIndicative: true,
+  });
 
   const handleAssignChef = async (bookingId: string) => {
     const chefId = selectedChefForBooking[bookingId];
@@ -234,6 +247,10 @@ export default function AdminPortalPage() {
         }
 
         // 2. Fetch applications from Supabase
+        // Resolve the platform rate alongside. Never throws — on failure it
+        // returns the legacy split marked indicative.
+        setCommission(await resolveCommission(supabase as any));
+
         const { data: dbApps } = await supabase
           .from("chef_applications")
           .select("*")
@@ -501,8 +518,25 @@ export default function AdminPortalPage() {
 
   if (!isAdmin) return null;
 
-  const totalGMV = bookings.reduce((sum, b) => sum + b.totalPrice, 0) || 1840000;
-  const totalCommission = Math.round(totalGMV * 0.15);
+  // GMV is the real sum of booking value. There is deliberately NO fallback
+  // figure here.
+  //
+  // This previously read `... || 1840000`, which meant that whenever the real
+  // total was zero the console silently displayed a fabricated KES 1,840,000
+  // — sitting next to a Bookings tab reading "(0)", with a commission tile
+  // derived from it. An admin console that invents revenue is worse than one
+  // that shows zero: it turns a broken pipeline into an apparently healthy
+  // business, and it hides exactly the regression worth noticing.
+  const totalGMV = bookings.reduce((sum, b) => sum + Number(b.totalPrice || 0), 0);
+
+  // Commission is only shown as a KES figure once a rate has been approved and
+  // activated. Until then the rate itself is unapproved commercial terms, so
+  // displaying a number here would contradict both the decision to leave
+  // platform_settings inactive and the "rate pending approval" wording the
+  // chef-facing screens already use.
+  const totalCommission = commission.isIndicative
+    ? null
+    : Math.round(totalGMV * commission.platformRate);
 
   return (
     <div className="min-h-screen bg-cream-50 text-forest-950 font-sans flex flex-col">
@@ -542,9 +576,19 @@ export default function AdminPortalPage() {
           <div className="bg-white rounded-2xl border border-forest-100 p-5">
             <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Commission</p>
             <p className="text-xl sm:text-2xl font-bold text-forest-950">
-              {totalCommission.toLocaleString()}
+              {totalCommission === null ? (
+                <span className="text-forest-300">—</span>
+              ) : (
+                totalCommission.toLocaleString()
+              )}
             </p>
-            <p className="text-xs text-forest-500 mt-0.5">15% take rate</p>
+            <p className="text-xs text-forest-500 mt-0.5">
+              {commission.isIndicative ? (
+                "Rate not yet approved"
+              ) : (
+                `${Math.round(commission.platformRate * 100)}% take rate`
+              )}
+            </p>
           </div>
 
           <div className="bg-white rounded-2xl border border-forest-100 p-5">
@@ -1158,9 +1202,14 @@ export default function AdminPortalPage() {
                             </div>
 
                             <div className="flex items-center gap-2 text-xs">
-                              <span className="text-forest-500 font-medium">Payout / GMV:</span>
+                              <span className="text-forest-500 font-medium">Booking value:</span>
                               <strong className="text-forest-950 font-black">
-                                KES {b.totalPrice?.toLocaleString() || "18,000"}
+                                {/* No fallback figure. This previously rendered a
+                                    hardcoded "18,000" for any booking with a zero
+                                    or missing total, inventing revenue per row. */}
+                                {b.totalPrice
+                                  ? `KES ${Number(b.totalPrice).toLocaleString()}`
+                                  : "Not recorded"}
                               </strong>
                             </div>
                           </div>
@@ -1236,10 +1285,24 @@ export default function AdminPortalPage() {
                               </a>
 
                               <a
-                                href={`https://wa.me/${b.clientPhone.replace(/\D/g, "") || "254786530713"}?text=${clientWaMsg}`}
+                                href={
+                                  b.clientPhone
+                                    ? `https://wa.me/${b.clientPhone.replace(/\D/g, "")}?text=${clientWaMsg}`
+                                    : undefined
+                                }
+                                aria-disabled={!b.clientPhone}
+                                title={
+                                  b.clientPhone
+                                    ? undefined
+                                    : "This booking has no client phone on file"
+                                }
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-forest-100 hover:bg-forest-200 text-forest-900 font-bold text-xs transition-all"
+                                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all ${
+                                  b.clientPhone
+                                    ? "bg-forest-100 hover:bg-forest-200 text-forest-900"
+                                    : "bg-forest-50 text-forest-300 cursor-not-allowed"
+                                } font-bold text-xs`}
                               >
                                 <Phone className="h-3.5 w-3.5" />
                                 <span>WhatsApp Client</span>

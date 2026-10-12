@@ -25,6 +25,24 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /** Legacy split, in force before the rate was made configurable. */
 export const LEGACY_CHEF_PAYOUT_RATE = 0.85;
 
+/**
+ * PROVISIONAL deposit rate.
+ *
+ * This is the share of the booking total collected up front. It is NOT the
+ * commission rate and must not be derived from it — they are separate
+ * commercial decisions.
+ *
+ * No deposit policy has been approved. The previous code inlined `0.15` at the
+ * one call site that computed a deposit, so the figure was neither
+ * configurable nor visible as an unapproved term. It is named here so there is
+ * exactly one place to change it, and so the unapproved status is legible in
+ * code review.
+ *
+ * Replace with an approved figure once the deposit model (deposit vs full
+ * payment) is settled.
+ */
+export const PROVISIONAL_DEPOSIT_RATE = 0.15;
+
 export type CommissionResolution = {
   /** Fraction of the booking total paid to the chef. */
   chefPayoutRate: number;
