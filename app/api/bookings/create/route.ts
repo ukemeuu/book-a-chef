@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
       preferred_stores,
       cuisine_type: requestedCuisine,
       cuisine_preference,
+      cuisine_types,
+      occasion_types,
+      dietary_requirements,
       budget_per_person,
       status: requestedStatus,
     } = body;
@@ -47,6 +50,23 @@ export async function POST(request: NextRequest) {
     // Accept either field name. The request form sends both, but older
     // clients and the proposals flow have used `cuisine_preference`.
     const cuisine_type = requestedCuisine || cuisine_preference;
+
+    // Full multi-select set, falling back to the primary choice so older
+    // clients and pre-existing rows still produce a usable match set.
+    const cuisineList: string[] =
+      Array.isArray(cuisine_types) && cuisine_types.length
+        ? cuisine_types
+        : cuisine_type
+        ? [cuisine_type]
+        : [];
+
+    const occasionList: string[] = Array.isArray(occasion_types)
+      ? occasion_types.filter(Boolean)
+      : [];
+
+    const dietaryList: string[] = Array.isArray(dietary_requirements)
+      ? dietary_requirements.filter(Boolean)
+      : [];
 
     // Basic validation (chef_id is optional in Uber-style dispatch flow)
     if (!booking_date || !guests_count || !location_address) {
@@ -160,6 +180,9 @@ export async function POST(request: NextRequest) {
       // budget_per_person likewise arrived from the form but was discarded;
       // dispatch and the chef-dashboard payout estimate both read it.
       cuisine_type: cuisine_type || null,
+      cuisine_types: cuisineList.length ? cuisineList : null,
+      occasion_types: occasionList.length ? occasionList : null,
+      dietary_requirements: dietaryList.length ? dietaryList : null,
       budget_per_person: budget_per_person != null ? Number(budget_per_person) : null,
       service_format,
       sourcing_preference,

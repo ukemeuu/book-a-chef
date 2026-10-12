@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar";
 import { createClient } from "@/utils/supabase/client";
 import {
   MapPin, Calendar, Users, ChefHat, ArrowRight, Clock,
-  Home, Truck, Phone, Mail, Loader2, Check,
+  Home, Truck, Phone, Mail, Loader2, Check, ShieldCheck,
 } from "lucide-react";
 
 const CUISINE_OPTIONS = [
@@ -37,6 +37,60 @@ const LOCATIONS = [
 ];
 
 const BUDGET_OPTIONS = ["3500", "5000", "7500", "10000", "15000"];
+
+/**
+ * Occasion is the strongest commercial signal on this form. "Anniversary for
+ * 6" and "corporate team dinner for 20" need entirely different chefs, and a
+ * stated occasion says something about willingness to pay.
+ *
+ * The reference funnel this multi-select pattern was borrowed from asks about
+ * nutrition instead — the wrong question for a one-off private dining event.
+ */
+const OCCASION_OPTIONS = [
+  { id: "Birthday", label: "Birthday", icon: "🎂" },
+  { id: "Anniversary", label: "Anniversary", icon: "💐" },
+  { id: "Date Night", label: "Date Night", icon: "🕯️" },
+  { id: "Family Gathering", label: "Family Gathering", icon: "👨‍👩‍👧‍👦" },
+  { id: "Corporate", label: "Corporate / Team", icon: "💼" },
+  { id: "Wedding", label: "Wedding / Reception", icon: "💒" },
+  { id: "Religious", label: "Religious Occasion", icon: "🙏" },
+  { id: "Surprise", label: "Surprise", icon: "🎁" },
+  { id: "Other", label: "Something Else", icon: "✨" },
+];
+
+/**
+ * Structured dietary requirements.
+ *
+ * Previously a free-text box. "no nuts" typed into a text field gives a chef
+ * nothing to match on and cannot be filtered. These are discrete values so
+ * they can be compared against chef.dietary_specialties during matching. The
+ * free-text box is retained for anything not covered here.
+ */
+const DIETARY_OPTIONS = [
+  { id: "Halal", label: "Halal", icon: "🕌" },
+  { id: "Vegetarian", label: "Vegetarian", icon: "🥗" },
+  { id: "Vegan", label: "Vegan", icon: "🌱" },
+  { id: "Gluten-Free", label: "Gluten-Free", icon: "🌾" },
+  { id: "Dairy-Free", label: "Dairy-Free", icon: "🥛" },
+  { id: "Nut Allergy", label: "Nut Allergy", icon: "🥜" },
+  { id: "Pescatarian", label: "Pescatarian", icon: "🐟" },
+  { id: "Low Carb / Keto", label: "Low Carb / Keto", icon: "🥑" },
+];
+
+/**
+ * Reassurance shown with the request form.
+ *
+ * Every claim here must be independently true on the day it renders. These
+ * replace the reference site's rotating proof points after discarding their
+ * numbers — that site advertises "14,000 chefs" and "53,000 meals cooked",
+ * while we have one chef and one booking. Publishing their figures would be the
+ * same fabricated proof that makes a marketplace untrustworthy.
+ */
+const REASSURANCE_POINTS = [
+  "You choose Accept or Decline before any chef is committed.",
+  "Every chef is ID-verified and kitchen-tasted before going live.",
+  "Payment is held until your chef accepts, then released via M-Pesa.",
+];
 
 function RequestChefContent() {
   const router = useRouter();
@@ -76,17 +130,59 @@ function RequestChefContent() {
       : ""
   );
   const [serviceFormat, setServiceFormat] = useState("in_home");
-  const [cuisine, setCuisine] = useState(
-    qCuisine
-      ? CUISINE_OPTIONS.find(
-          (c) =>
-            c.label.toLowerCase().includes(qCuisine.toLowerCase()) ||
-            c.id.toLowerCase().includes(qCuisine.toLowerCase())
-        )?.id || qCuisine
-      : ""
-  );
+
+  // Multi-select.
+  //
+  // This was single-select, which forced a guest who wanted both Italian and
+  // seafood to pick one. That matters beyond the form: utils/dispatch.ts scores
+  // cuisine match at 40 points — the largest weight in the model — so a single
+  // value both narrowed the customer's intent and narrowed what the engine
+  // could match on.
+  //
+  // `cuisine` (singular) is kept as the primary/first selection so existing
+  // code and existing rows keep working. `cuisines` is the full set.
+  const [cuisines, setCuisines] = useState<string[]>(() => {
+    if (!qCuisine) return [];
+    const match = CUISINE_OPTIONS.find(
+      (c) =>
+        c.label.toLowerCase().includes(qCuisine.toLowerCase()) ||
+        c.id.toLowerCase().includes(qCuisine.toLowerCase())
+    );
+    return [match?.id || qCuisine];
+  });
+
+  const toggleCuisine = (id: string) =>
+    setCuisines((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
+
+  // "Any" is mutually exclusive with specific choices.
+  const selectCuisine = (id: string) => {
+    if (id === "Any") {
+      setCuisines(cuisines.includes("Any") ? [] : ["Any"]);
+      return;
+    }
+    if (cuisines.includes("Any")) {
+      setCuisines([id]);
+      return;
+    }
+    toggleCuisine(id);
+  };
+
+  const cuisine = cuisines[0] || "";
+  const [occasion, setOccasion] = useState<string[]>([]);
+  const toggleOccasion = (id: string) =>
+    setOccasion((prev) =>
+      prev.includes(id) ? prev.filter((o) => o !== id) : [...prev, id]
+    );
+
   const [sourcing, setSourcing] = useState("chef_sourced");
-  const [dietary, setDietary] = useState("");
+  const [dietary, setDietary] = useState<string[]>([]);
+  const toggleDietary = (id: string) =>
+    setDietary((prev) =>
+      prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]
+    );
+  const [dietaryOther, setDietaryOther] = useState("");
   const [specialRequests, setSpecialRequests] = useState("");
   const [budget, setBudget] = useState("5000");
   const [customBudget, setCustomBudget] = useState("");
@@ -104,7 +200,7 @@ function RequestChefContent() {
     const newErrors: Record<string, string> = {};
     if (!date) newErrors.date = "Required";
     if (!location) newErrors.location = "Required";
-    if (!cuisine) newErrors.cuisine = "Required";
+    if (cuisines.length === 0) newErrors.cuisine = "Pick at least one";
     if (!name.trim()) newErrors.name = "Required";
     if (!phone.trim()) newErrors.phone = "Required";
     if (!effectiveBudget || parseInt(effectiveBudget) <= 0) newErrors.budget = "Required";
@@ -136,11 +232,18 @@ function RequestChefContent() {
         // and the booking arrived with cuisine_type = null — which disabled the
         // single largest dispatch scoring term (40 points). Send both names so
         // the field survives either way.
+        //
+        // cuisine_type stays singular (primary choice) for backward
+        // compatibility; cuisine_types carries the full multi-select set that
+        // dispatch matches against.
         cuisine_type: cuisine,
         cuisine_preference: cuisine,
+        cuisine_types: cuisines,
+        occasion_types: occasion,
+        dietary_requirements: [...dietary, ...(dietaryOther.trim() ? [dietaryOther.trim()] : [])],
         service_format: serviceFormat,
         sourcing_preference: sourcing,
-        dietary_notes: dietary,
+        dietary_notes: dietaryOther.trim() || dietary.join(", ") || null,
         special_requests: specialRequests,
         budget_per_person: parseInt(effectiveBudget) || 5000,
         status: "pending_assignment",
@@ -319,28 +422,77 @@ function RequestChefContent() {
           <section className="bg-white rounded-2xl border border-forest-100 p-6 space-y-5">
             <h2 className="text-lg font-bold text-forest-950">Cuisine & budget</h2>
 
-            {/* Cuisine */}
-            <div data-error={errors.cuisine || undefined}>
-              <label className={labelClass}>Cuisine</label>
+            {/* Occasion — new */}
+            <div>
+              <label className={labelClass}>What is the occasion?</label>
               <div className="grid grid-cols-3 gap-2">
-                {CUISINE_OPTIONS.map((c) => (
+                {OCCASION_OPTIONS.map((o) => (
                   <button
-                    key={c.id}
+                    key={o.id}
                     type="button"
-                    onClick={() => setCuisine(c.id)}
-                    className={`p-3 rounded-xl border-2 text-center transition-all ${
-                      cuisine === c.id
+                    aria-pressed={occasion.includes(o.id)}
+                    onClick={() => toggleOccasion(o.id)}
+                    className={`p-3 rounded-xl border-2 text-center transition-all relative ${
+                      occasion.includes(o.id)
                         ? "border-forest-950 bg-forest-950 text-white"
                         : "border-forest-200 hover:border-forest-400"
                     }`}
                   >
-                    <span className="text-xl block mb-1">{c.icon}</span>
-                    <span className={`text-xs font-medium ${cuisine === c.id ? "text-cream-200" : "text-forest-700"}`}>
-                      {c.label}
+                    {occasion.includes(o.id) && (
+                      <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-champagne-400 flex items-center justify-center">
+                        <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-forest-950" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M2 6.5l2.5 2.5L10 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    )}
+                    <span className="text-xl block mb-1">{o.icon}</span>
+                    <span className={`text-xs font-medium ${occasion.includes(o.id) ? "text-cream-200" : "text-forest-700"}`}>
+                      {o.label}
                     </span>
                   </button>
                 ))}
               </div>
+              <p className="text-[11px] text-forest-400 mt-2">
+                Optional, but it helps us match a chef suited to the evening.
+              </p>
+            </div>
+
+            {/* Cuisine — multi-select */}
+            <div data-error={errors.cuisine || undefined}>
+              <label className={labelClass}>Cuisine</label>
+              <div className="grid grid-cols-3 gap-2">
+                {CUISINE_OPTIONS.map((c) => {
+                  const active = cuisines.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => selectCuisine(c.id)}
+                      className={`p-3 rounded-xl border-2 text-center transition-all relative ${
+                        active
+                          ? "border-forest-950 bg-forest-950 text-white"
+                          : "border-forest-200 hover:border-forest-400"
+                      }`}
+                    >
+                      {active && (
+                        <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-champagne-400 flex items-center justify-center">
+                          <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-forest-950" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M2 6.5l2.5 2.5L10 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                      )}
+                      <span className="text-xl block mb-1">{c.icon}</span>
+                      <span className={`text-xs font-medium ${active ? "text-cream-200" : "text-forest-700"}`}>
+                        {c.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-forest-400 mt-2">
+                Choose as many as you like — more choices means a better match.
+              </p>
               {errors.cuisine && <p className={errorClass}>{errors.cuisine}</p>}
             </div>
 
@@ -425,14 +577,35 @@ function RequestChefContent() {
               {errors.budget && <p className={errorClass}>{errors.budget}</p>}
             </div>
 
-            {/* Dietary */}
+            {/* Dietary — structured chips + free text */}
             <div>
               <label className={labelClass}>Dietary requirements</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {DIETARY_OPTIONS.map((d) => {
+                  const active = dietary.includes(d.id);
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => toggleDietary(d.id)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-medium transition-all ${
+                        active
+                          ? "border-forest-950 bg-forest-950 text-white"
+                          : "border-forest-200 hover:border-forest-400 text-forest-700"
+                      }`}
+                    >
+                      <span>{d.icon}</span>
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
               <input
                 type="text"
-                placeholder="e.g. Halal, Vegan, Nut allergy…"
-                value={dietary}
-                onChange={(e) => setDietary(e.target.value)}
+                placeholder="Anything else? e.g. severe shellfish allergy"
+                value={dietaryOther}
+                onChange={(e) => setDietaryOther(e.target.value)}
                 className={inputClass}
               />
             </div>
@@ -524,6 +697,16 @@ function RequestChefContent() {
             <a href="/terms" className="underline hover:text-forest-950">Terms of Service</a>.
             {" "}We&apos;ll reach out via WhatsApp to confirm your match.
           </p>
+
+          {/* Reassurance — rotating, and every claim must stay true */}
+          <ul className="space-y-2 pt-2">
+            {REASSURANCE_POINTS.map((point) => (
+              <li key={point} className="flex items-start gap-2.5 text-xs text-forest-500">
+                <ShieldCheck className="w-4 h-4 text-forest-400 shrink-0 mt-0.5" />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </main>
     </div>

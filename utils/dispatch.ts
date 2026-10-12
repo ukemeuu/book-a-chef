@@ -45,25 +45,60 @@ export async function matchChefToBooking(supabase: ReturnType<typeof createClien
     let score = 0;
 
     // Cuisine match (0-40 points)
-    if (booking.cuisine_type && chef.cuisines?.includes(booking.cuisine_type)) {
-      score += 40;
-    } else if (booking.cuisine_type) {
-      const relatedMap: Record<string, string[]> = {
-        "Swahili": ["Seafood", "Coastal Fusion"],
-        "Seafood": ["Swahili", "Coastal Fusion"],
-        "BBQ": ["Nyama Choma", "Kenyan Traditional"],
-        "Nyama Choma": ["BBQ", "Kenyan Traditional"],
-        "Italian": ["Continental", "Fine Dining"],
-        "Continental": ["Italian", "Fine Dining"],
-        "Fine Dining": ["Continental", "Italian"],
-        "Indian": ["Pan-Asian"],
-        "Pan-Asian": ["Indian"],
-        "Vegan": ["Vegetarian"],
-        "Vegetarian": ["Vegan"],
-      };
-      const related = relatedMap[booking.cuisine_type] || [];
-      if (related.some((r) => chef.cuisines?.includes(r))) {
-        score += 20;
+    //
+    // Scores against the FULL multi-select set, not just the primary choice.
+    // The request form collects several cuisines per booking; a chef who covers
+    // any of them is a genuine match, and previously only cuisine_type[0] was
+    // ever considered, so a guest asking for "Italian and Seafood" was scored
+    // against Italian alone.
+    //
+    // A chef matching every requested cuisine outranks one matching a single
+    // cuisine, which is the intent of a multi-select field.
+    const requestedCuisines: string[] =
+      Array.isArray((booking as any).cuisine_types) && (booking as any).cuisine_types.length
+        ? (booking as any).cuisine_types
+        : booking.cuisine_type
+        ? [booking.cuisine_type]
+        : [];
+
+    if (requestedCuisines.length > 0) {
+      const chefCuisines: string[] = chef.cuisines || [];
+
+      // "Any" means the guest has no cuisine preference — the chef matching at
+      // all is the match, so award full marks rather than scoring against a
+      // literal "Any" that no chef will ever list.
+      if (requestedCuisines.includes("Any")) {
+        score += 40;
+      } else {
+        const directHits = requestedCuisines.filter((c) =>
+          chefCuisines.includes(c)
+        );
+
+        if (directHits.length > 0) {
+          // 40 for covering everything requested, 32 for most of it, 25 for one.
+          if (directHits.length >= requestedCuisines.length) score += 40;
+          else if (directHits.length >= 2) score += 32;
+          else score += 25;
+
+          // Related-cuisine credit on top, for chefs adjacent to what was asked.
+          const relatedMap: Record<string, string[]> = {
+            Swahili: ["Seafood", "Coastal Fusion"],
+            Seafood: ["Swahili", "Coastal Fusion"],
+            BBQ: ["Nyama Choma", "Kenyan Traditional"],
+            "Nyama Choma": ["BBQ", "Kenyan Traditional"],
+            Italian: ["Continental", "Fine Dining"],
+            Continental: ["Italian", "Fine Dining"],
+            "Fine Dining": ["Continental", "Italian"],
+            Indian: ["Pan-Asian"],
+            "Pan-Asian": ["Indian"],
+            Vegan: ["Vegetarian"],
+            Vegetarian: ["Vegan"],
+          };
+          const relatedHit = requestedCuisines.some((c) =>
+            (relatedMap[c] || []).some((r) => chefCuisines.includes(r))
+          );
+          if (relatedHit) score += 8;
+        }
       }
     }
 
