@@ -38,10 +38,15 @@ export async function POST(request: NextRequest) {
       service_format = "in_home",
       sourcing_preference = "chef_sourced",
       preferred_stores,
-      cuisine_type,
+      cuisine_type: requestedCuisine,
+      cuisine_preference,
       budget_per_person,
       status: requestedStatus,
     } = body;
+
+    // Accept either field name. The request form sends both, but older
+    // clients and the proposals flow have used `cuisine_preference`.
+    const cuisine_type = requestedCuisine || cuisine_preference;
 
     // Basic validation (chef_id is optional in Uber-style dispatch flow)
     if (!booking_date || !guests_count || !location_address) {
@@ -144,6 +149,18 @@ export async function POST(request: NextRequest) {
       location_city: location_city || "Nairobi",
       special_requests: formattedRequests,
       dietary_notes: dietary_notes?.trim() || null,
+      // Persist these to their own columns.
+      //
+      // cuisine_type was previously only embedded in the special_requests text
+      // and never written to the column. utils/dispatch.ts scores cuisine match
+      // at 40 points — the largest single weight — off booking.cuisine_type, so
+      // with the column always NULL the whole cuisine tier was dead and every
+      // match ran on location, rating and availability alone.
+      //
+      // budget_per_person likewise arrived from the form but was discarded;
+      // dispatch and the chef-dashboard payout estimate both read it.
+      cuisine_type: cuisine_type || null,
+      budget_per_person: budget_per_person != null ? Number(budget_per_person) : null,
       service_format,
       sourcing_preference,
       preferred_stores: preferred_stores?.trim() || null,

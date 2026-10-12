@@ -131,6 +131,12 @@ function RequestChefContent() {
         booking_time: time,
         guests_count: guests,
         location_address: location,
+        // The API reads `cuisine_type`. This form previously sent
+        // `cuisine_preference`, so the customer's cuisine was silently dropped
+        // and the booking arrived with cuisine_type = null — which disabled the
+        // single largest dispatch scoring term (40 points). Send both names so
+        // the field survives either way.
+        cuisine_type: cuisine,
         cuisine_preference: cuisine,
         service_format: serviceFormat,
         sourcing_preference: sourcing,
