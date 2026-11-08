@@ -7,23 +7,17 @@ import {
   ChefHat,
   Search,
   MapPin,
-  Calendar,
-  Users,
   Star,
   ShieldCheck,
-  Sparkles,
   ArrowRight,
   CheckCircle2,
-  Clock,
-  Home,
-  Truck,
-  Receipt,
   BadgeCheck,
-  Heart,
+  Phone,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { MarketplaceChef, formatPrice } from "@/utils/marketplace";
+import ChefCard from "@/components/chef/ChefCard";
+import { MarketplaceChef } from "@/utils/marketplace";
 import { createClient } from "@/utils/supabase/client";
 
 const CUISINE_CATEGORIES = [
@@ -89,50 +83,47 @@ const DINING_EXPERIENCES = [
   },
 ];
 
-const HOW_IT_WORKS = [
+const VERIFICATION_STEPS = [
   {
     step: "01",
-    title: "Browse or request",
-    desc: "Browse verified chefs and their menus, or tell us what you need and we'll match you.",
-    icon: <Search className="h-5 w-5" />,
+    title: "Apply with your details",
+    desc: "Chefs apply with their name, cuisines, and a national ID or passport number.",
+    icon: <ChefHat className="h-5 w-5" />,
   },
   {
     step: "02",
-    title: "Book & confirm",
-    desc: "Pick your chef, menu, and date. The chef confirms — then pay securely via M-Pesa.",
-    icon: <Calendar className="h-5 w-5" />,
+    title: "We verify and vet",
+    desc: "Our team reviews every application, confirms credentials, and may arrange a tasting.",
+    icon: <ShieldCheck className="h-5 w-5" />,
   },
   {
     step: "03",
-    title: "Chef arrives & cooks",
-    desc: "Your chef shows up with fresh ingredients, cooks course-by-course, and cleans up.",
-    icon: <Sparkles className="h-5 w-5" />,
+    title: "Profile goes live",
+    desc: "Approved chefs appear in the directory with a Verified badge and their direct number.",
+    icon: <BadgeCheck className="h-5 w-5" />,
   },
 ];
 
 const TRUST_FEATURES = [
   {
     icon: <ShieldCheck className="h-5 w-5 text-forest-600" />,
-    title: "Vetted & Verified",
-    desc: "Every chef passes background checks, kitchen tastings, and ID verification.",
+    title: "ID-verified chefs",
+    desc: "Every chef submits a national ID or passport before their profile goes live.",
   },
   {
-    icon: <Receipt className="h-5 w-5 text-forest-600" />,
-    title: "0% Markup Sourcing",
-    desc: "Your chef shops at Carrefour, Naivas, or Chandarana — receipts at cost.",
+    icon: <Phone className="h-5 w-5 text-forest-600" />,
+    title: "Direct contact",
+    desc: "Call or WhatsApp the chef directly — no platform messaging, no middleman.",
   },
   {
     icon: <Star className="h-5 w-5 text-forest-600" />,
-    title: "Meal-Tested",
-    desc: "Every chef cooks a full menu at our test kitchen before going live.",
+    title: "Vetted by our team",
+    desc: "We review each application and confirm credentials before listing.",
   },
 ];
 
 export default function HomePage() {
   const [activeCategory, setActiveCategory] = useState("all");
-  const [location, setLocation] = useState("");
-  const [date, setDate] = useState("");
-  const [guests, setGuests] = useState(4);
   const [featuredChefs, setFeaturedChefs] = useState<MarketplaceChef[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
@@ -192,10 +183,6 @@ export default function HomePage() {
     }
   };
 
-  const minDate = new Date();
-  minDate.setDate(minDate.getDate() + 2);
-  const minDateStr = minDate.toISOString().split("T")[0];
-
   return (
     <div className="min-h-screen bg-white text-forest-950 font-sans">
       <Navbar />
@@ -214,72 +201,29 @@ export default function HomePage() {
 
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <h1 className="font-sans text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
-            A private chef,
+            Find a private chef,
             <br />
-            <span className="text-champagne-400">at your table.</span>
+            <span className="text-champagne-400">call them directly.</span>
           </h1>
           <p className="mt-4 text-base sm:text-lg text-cream-200/80 max-w-xl mx-auto leading-relaxed">
-            Browse verified chefs and book directly — or tell us what you need
-            and we&apos;ll match you.
+            Browse verified chefs across Kenya, see what they cook, and reach
+            them on WhatsApp or phone — no booking forms, no middleman.
           </p>
 
-          {/* Search Bar — Airbnb style */}
-          <div className="mt-8 bg-white rounded-2xl shadow-2xl p-2 flex flex-col sm:flex-row gap-2 max-w-2xl mx-auto">
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-cream-50 transition-colors cursor-pointer">
-              <MapPin className="h-5 w-5 text-forest-400 shrink-0" />
-              <div className="flex-1 text-left">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400">Where</p>
-                <input
-                  type="text"
-                  placeholder="Nairobi, Diani, Naivasha..."
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full text-sm font-medium text-forest-950 placeholder-forest-400 outline-none bg-transparent"
-                />
-              </div>
-            </div>
-            <div className="hidden sm:block w-px bg-forest-100" />
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-cream-50 transition-colors cursor-pointer">
-              <Calendar className="h-5 w-5 text-forest-400 shrink-0" />
-              <div className="flex-1 text-left">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400">When</p>
-                <input
-                  type="date"
-                  min={minDateStr}
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full text-sm font-medium text-forest-950 placeholder-forest-400 outline-none bg-transparent"
-                />
-              </div>
-            </div>
-            <div className="hidden sm:block w-px bg-forest-100" />
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-cream-50 transition-colors cursor-pointer">
-              <Users className="h-5 w-5 text-forest-400 shrink-0" />
-              <div className="flex-1 text-left">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400">Guests</p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setGuests(Math.max(2, guests - 1))}
-                    className="w-6 h-6 rounded-full border border-forest-200 flex items-center justify-center text-forest-600 hover:border-forest-400 transition-colors"
-                  >
-                    −
-                  </button>
-                  <span className="text-sm font-medium text-forest-950 w-6 text-center">{guests}</span>
-                  <button
-                    onClick={() => setGuests(Math.min(80, guests + 1))}
-                    className="w-6 h-6 rounded-full border border-forest-200 flex items-center justify-center text-forest-600 hover:border-forest-400 transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
-              href="/request"
-              className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-champagne-500 hover:bg-champagne-600 text-white font-bold text-sm transition-all active:scale-95 shrink-0"
+              href="/chefs"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 font-bold text-sm transition-all active:scale-95 shadow-lg"
             >
               <Search className="h-4 w-4" />
-              <span>Search</span>
+              Browse chefs
+            </Link>
+            <Link
+              href="/apply"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border border-white/25 text-white font-bold text-sm hover:bg-white/10 transition-all"
+            >
+              <ChefHat className="h-4 w-4" />
+              Join as a chef
             </Link>
           </div>
 
@@ -287,15 +231,15 @@ export default function HomePage() {
           <div className="mt-8 flex items-center justify-center gap-6 text-cream-200/60 text-xs font-medium">
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5 text-champagne-400" />
-              50+ certified chefs
+              ID-verified chefs
             </span>
             <span className="flex items-center gap-1.5">
               <Star className="h-3.5 w-3.5 text-champagne-400 fill-current" />
-              4.9 average rating
+              Rated by customers
             </span>
             <span className="hidden sm:flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-champagne-400" />
-              Background checked
+              Vetted by our team
             </span>
           </div>
         </div>
@@ -311,13 +255,14 @@ export default function HomePage() {
           >
             {CUISINE_CATEGORIES.map((cat) => {
               const isActive = activeCategory === cat.id;
+              const href =
+                cat.id === "all" ? "/chefs" : `/chefs?cuisine=${encodeURIComponent(cat.id)}`;
               return (
-                <button
+                <Link
                   key={cat.id}
-                  type="button"
+                  href={href}
                   role="tab"
                   aria-selected={isActive}
-                  onClick={() => setActiveCategory(cat.id)}
                   className={`inline-flex shrink-0 items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 focus-visible:outline-none ${
                     isActive
                       ? "bg-forest-950 text-white shadow-sm"
@@ -326,7 +271,7 @@ export default function HomePage() {
                 >
                   <span aria-hidden="true" className="leading-none">{cat.icon}</span>
                   <span className="leading-none">{cat.label}</span>
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -340,7 +285,7 @@ export default function HomePage() {
             <div className="flex items-end justify-between mb-8">
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-                  Marketplace
+                  Directory
                 </p>
                 <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
                   Featured chefs
@@ -357,90 +302,12 @@ export default function HomePage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {featuredChefs.map((chef) => (
-                <Link
+                <ChefCard
                   key={chef.id}
-                  href={`/chefs/${chef.slug}`}
-                  className="group block"
-                >
-                  <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-cream-100">
-                    <Image
-                      src={chef.cover_image_url || chef.avatar_url}
-                      alt={chef.name}
-                      fill
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-forest-950/35 via-transparent to-transparent" />
-                    {chef.is_available && (
-                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-sm">
-                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-                        Available
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toggleFavorite(chef);
-                      }}
-                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-colors shadow-sm"
-                      aria-label="Save chef"
-                    >
-                      <Heart
-                        className={`h-4 w-4 ${
-                          favorites.has(chef.id)
-                            ? "fill-red-500 text-red-500"
-                            : "text-forest-600"
-                        }`}
-                      />
-                    </button>
-                  </div>
-                  <div className="mt-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1">
-                          <h3 className="font-bold text-forest-950 truncate">
-                            {chef.name}
-                          </h3>
-                          {chef.verified && (
-                            <BadgeCheck className="h-4 w-4 text-forest-600 shrink-0" />
-                          )}
-                        </div>
-                        {chef.brand_name && (
-                          <p className="text-xs text-forest-500 truncate">
-                            {chef.brand_name}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Star className="h-3.5 w-3.5 text-champagne-500 fill-current" />
-                        <span className="text-sm font-semibold text-forest-950">
-                          {Number(chef.rating || 0).toFixed(1)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {chef.cuisines?.slice(0, 3).map((c) => (
-                        <span
-                          key={c}
-                          className="px-2 py-0.5 rounded-full bg-cream-100 text-forest-700 text-[10px] font-medium"
-                        >
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-between mt-2.5">
-                      <span className="text-xs text-forest-500 flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {chef.city}
-                      </span>
-                      <span className="text-sm font-bold text-forest-950">
-                        {formatPrice(chef.price_per_guest)}
-                        <span className="text-[10px] font-normal text-forest-400"> /guest</span>
-                      </span>
-                    </div>
-                  </div>
-                </Link>
+                  chef={chef}
+                  isFavorite={favorites.has(chef.id)}
+                  onToggleFavorite={(e) => toggleFavorite(chef)}
+                />
               ))}
             </div>
 
@@ -457,20 +324,24 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── HOW IT WORKS ── */}
+      {/* ── HOW VERIFICATION WORKS ── */}
       <section className="py-16 sm:py-20 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-              How it works
+              Verification
             </p>
             <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-              Three steps to dinner
+              Every chef is vetted
             </h2>
+            <p className="mt-3 text-forest-500">
+              A profile is never public until our team has confirmed who the
+              chef is. Here is the process.
+            </p>
           </div>
 
           <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-            {HOW_IT_WORKS.map((item) => (
+            {VERIFICATION_STEPS.map((item) => (
               <div
                 key={item.step}
                 className="group flex flex-col h-full bg-white rounded-2xl p-6 border border-forest-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
@@ -503,7 +374,7 @@ export default function HomePage() {
               Why Book A Chef
             </p>
             <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-              Built on trust
+              A directory you can trust
             </h2>
           </div>
 
@@ -529,10 +400,10 @@ export default function HomePage() {
           <div className="flex items-end justify-between mb-8">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-                Experiences
+                Cuisines
               </p>
               <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-                Ways to dine
+                What they cook
               </h2>
             </div>
           </div>
@@ -618,10 +489,11 @@ export default function HomePage() {
 
             <div className="relative max-w-2xl mx-auto">
               <h2 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight">
-                Your kitchen is the best restaurant in town
+                Your next dinner starts with a phone call
               </h2>
               <p className="mt-4 text-cream-200/70 text-base sm:text-lg leading-relaxed">
-                Browse verified chefs, pick your favourite, and book in minutes.
+                Browse verified chefs, see what they cook, and reach them
+                directly.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link
@@ -632,10 +504,10 @@ export default function HomePage() {
                   Browse chefs
                 </Link>
                 <Link
-                  href="/request"
+                  href="/apply"
                   className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/25 text-white font-bold text-sm uppercase tracking-wider hover:bg-white/10 transition-all"
                 >
-                  Request a chef
+                  Join as a chef
                 </Link>
               </div>
             </div>

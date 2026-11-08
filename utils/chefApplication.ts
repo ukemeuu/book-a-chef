@@ -100,8 +100,14 @@ function parseExperienceYears(value?: string | null): number {
   return match ? Math.max(1, parseInt(match[0], 10)) : 5;
 }
 
-export const DEFAULT_CHEF_AVATAR = "/images/avatars/chef-smile-2.jpg";
-export const DEFAULT_CHEF_COVER = "/images/home/chef-plating.jpg";
+/**
+ * Default imagery for a listing that has no photo yet.
+ *
+ * These are the Book A Chef brand assets, not stock photography: a chef who
+ * has not uploaded a portrait sees our logo instead of a stranger's face.
+ */
+export const DEFAULT_CHEF_AVATAR = "/icon.png";
+export const DEFAULT_CHEF_COVER = "/icon.png";
 
 /**
  * Build the marketplace listing created when an admin approves an application.

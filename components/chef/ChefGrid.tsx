@@ -64,12 +64,6 @@ export default function ChefGrid({
         if (filters.search) params.set("search", filters.search);
         if (filters.cuisine) params.set("cuisine", filters.cuisine);
         if (filters.location) params.set("location", filters.location);
-        if (filters.priceBand) {
-          const [min, max] = filters.priceBand.split("-");
-          params.set("min_price", min);
-          params.set("max_price", max);
-        }
-        if (filters.availableOnly) params.set("available", "true");
         params.set("sort", filters.sort);
         params.set("limit", "60");
 

@@ -1,14 +1,12 @@
 "use client";
 
-import { CUISINE_OPTIONS, LOCATION_OPTIONS, PRICE_BANDS } from "@/utils/marketplace";
+import { CUISINE_OPTIONS, LOCATION_OPTIONS } from "@/utils/marketplace";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 export interface FilterState {
   search: string;
   cuisine: string;
   location: string;
-  priceBand: string;
-  availableOnly: boolean;
   sort: string;
 }
 
@@ -16,8 +14,6 @@ export const DEFAULT_FILTERS: FilterState = {
   search: "",
   cuisine: "",
   location: "",
-  priceBand: "",
-  availableOnly: false,
   sort: "rating",
 };
 
@@ -40,12 +36,7 @@ export default function ChefFilters({
 
   const reset = () => onChange(DEFAULT_FILTERS);
 
-  const hasActiveFilters =
-    filters.search ||
-    filters.cuisine ||
-    filters.location ||
-    filters.priceBand ||
-    filters.availableOnly;
+  const hasActiveFilters = filters.search || filters.cuisine || filters.location;
 
   return (
     <div className="bg-white rounded-2xl border border-forest-100 p-4 sm:p-5 space-y-4">
@@ -71,8 +62,6 @@ export default function ChefFilters({
           >
             <option value="rating">Top rated</option>
             <option value="reviews">Most reviewed</option>
-            <option value="price_asc">Price: low to high</option>
-            <option value="price_desc">Price: high to low</option>
             <option value="newest">Newest</option>
           </select>
         </div>
@@ -107,32 +96,6 @@ export default function ChefFilters({
             </option>
           ))}
         </select>
-
-        <select
-          value={filters.priceBand}
-          onChange={(e) => update("priceBand", e.target.value)}
-          className={selectClass + " w-auto min-w-[160px]"}
-          aria-label="Filter by price"
-        >
-          <option value="">Any price</option>
-          {PRICE_BANDS.map((b) => (
-            <option key={b.label} value={`${b.min}-${b.max}`}>
-              {b.label}
-            </option>
-          ))}
-        </select>
-
-        <label className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-forest-200 bg-white cursor-pointer hover:border-forest-400 transition-colors select-none">
-          <input
-            type="checkbox"
-            checked={filters.availableOnly}
-            onChange={(e) => update("availableOnly", e.target.checked)}
-            className="h-4 w-4 rounded accent-forest-950"
-          />
-          <span className="text-sm font-medium text-forest-800">
-            Available now
-          </span>
-        </label>
 
         {hasActiveFilters && (
           <button

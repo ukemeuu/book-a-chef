@@ -13,9 +13,9 @@ export default function Footer() {
               <span className="font-bold text-white">Book A Chef</span>
             </Link>
             <p className="text-sm text-cream-200/60 leading-relaxed">
-              Kenya&apos;s marketplace for private chefs. Browse verified chefs,
-              view their menus, and book directly — or tell us what you need and
-              we&apos;ll match you.
+              Kenya&apos;s directory of verified private chefs. Browse profiles,
+              see what they cook, and contact them directly by phone or
+              WhatsApp.
             </p>
           </div>
 
@@ -29,13 +29,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/request" className="hover:text-white transition-colors">
-                  Request a chef
-                </Link>
-              </li>
-              <li>
                 <Link href="/dashboard" className="hover:text-white transition-colors">
-                  My bookings
+                  My favourites
                 </Link>
               </li>
             </ul>
@@ -47,12 +42,12 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-cream-200/60">
               <li>
                 <Link href="/apply" className="hover:text-white transition-colors">
-                  Apply as a chef
+                  Join the directory
                 </Link>
               </li>
               <li>
                 <Link href="/chef-jobs" className="hover:text-white transition-colors">
-                  Earnings
+                  Why join
                 </Link>
               </li>
               <li>

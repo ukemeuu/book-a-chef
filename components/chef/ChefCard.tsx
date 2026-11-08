@@ -2,8 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Star, MapPin, Heart, BadgeCheck } from "lucide-react";
-import { MarketplaceChef, formatPrice } from "@/utils/marketplace";
+import { Star, MapPin, Heart, BadgeCheck, Phone } from "lucide-react";
+import {
+  MarketplaceChef,
+  chefCover,
+  chefTelUrl,
+  formatPhone,
+} from "@/utils/marketplace";
 
 interface ChefCardProps {
   chef: MarketplaceChef;
@@ -12,17 +17,19 @@ interface ChefCardProps {
 }
 
 /**
- * Airbnb-style chef card for the marketplace grid.
+ * Airbnb-style chef card for the directory grid.
  *
  * The card links to the public profile. The heart button is a sibling overlay
- * that stops propagation so favouriting never navigates.
+ * that stops propagation so favouriting never navigates. The phone number is
+ * shown so customers can reach the chef directly from the grid.
  */
 export default function ChefCard({
   chef,
   isFavorite,
   onToggleFavorite,
 }: ChefCardProps) {
-  const cover = chef.cover_image_url || chef.avatar_url;
+  const cover = chefCover(chef);
+  const telUrl = chefTelUrl(chef.phone);
 
   return (
     <Link
@@ -30,7 +37,7 @@ export default function ChefCard({
       className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 rounded-2xl"
     >
       {/* Cover */}
-      <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-cream-100">
+      <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-forest-950">
         <Image
           src={cover}
           alt={chef.name}
@@ -39,15 +46,14 @@ export default function ChefCard({
           className="object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div
-          className="absolute inset-0 bg-gradient-to-t from-forest-950/35 via-transparent to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-forest-950/40 via-transparent to-transparent"
           aria-hidden="true"
         />
 
-        {/* Availability */}
-        {chef.is_available && (
-          <span className="absolute top-3 left-3 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-            Available
+        {chef.verified && (
+          <span className="absolute top-3 left-3 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/90 text-forest-900 text-[10px] font-bold shadow-sm">
+            <BadgeCheck className="h-3 w-3 text-emerald-600" />
+            Verified
           </span>
         )}
 
@@ -78,9 +84,6 @@ export default function ChefCard({
               <h3 className="font-bold text-forest-950 truncate">
                 {chef.name}
               </h3>
-              {chef.verified && (
-                <BadgeCheck className="h-4 w-4 text-forest-600 shrink-0" />
-              )}
             </div>
             {chef.brand_name && (
               <p className="text-xs text-forest-500 truncate">
@@ -93,11 +96,6 @@ export default function ChefCard({
             <span className="text-sm font-semibold text-forest-950">
               {Number(chef.rating || 0).toFixed(1)}
             </span>
-            {chef.reviews_count > 0 && (
-              <span className="text-xs text-forest-400">
-                ({chef.reviews_count})
-              </span>
-            )}
           </div>
         </div>
 
@@ -121,13 +119,17 @@ export default function ChefCard({
             <MapPin className="h-3 w-3 shrink-0" />
             <span className="truncate">{chef.city}</span>
           </span>
-          <span className="text-sm font-bold text-forest-950 shrink-0">
-            {formatPrice(chef.price_per_guest)}
-            <span className="text-[10px] font-normal text-forest-400">
-              {" "}
-              /guest
-            </span>
-          </span>
+          {chef.phone && telUrl ? (
+            <a
+              href={telUrl}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-bold text-forest-950 flex items-center gap-1 shrink-0 hover:text-forest-700 transition-colors"
+              aria-label={`Call ${chef.name}`}
+            >
+              <Phone className="h-3 w-3" />
+              {formatPhone(chef.phone)}
+            </a>
+          ) : null}
         </div>
       </div>
     </Link>

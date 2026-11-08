@@ -23,16 +23,16 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Book A Chef | On-Demand Private Chefs Across Kenya",
+  title: "Book A Chef | Verified Private Chefs Across Kenya",
   description:
-    "Request a vetted private chef for your home or villa. Tell us your date, location and cuisine — we match and dispatch a certified chef to your kitchen.",
+    "Browse verified private chefs across Kenya. See what they cook and contact them directly by phone or WhatsApp.",
   keywords:
-    "private chef Nairobi, book a chef Kenya, on-demand chef dispatch, in-home dining Kenya, private catering Karen, Diani holiday chef, Swahili cuisine private chef",
+    "private chef Nairobi, find a chef Kenya, chef directory Kenya, private dining Karen, Diani chef, Swahili cuisine private chef, verified chefs Kenya",
   metadataBase: new URL("https://bookachef.co.ke"),
   openGraph: {
-    title: "Book A Chef | On-Demand Private Chefs in Kenya",
+    title: "Book A Chef | Verified Private Chefs in Kenya",
     description:
-      "Tell us what you need. We dispatch a vetted chef to your kitchen for intimate dinners, celebrations and luxury coastal retreats.",
+      "Browse verified private chefs, see what they cook, and contact them directly.",
     url: "https://bookachef.co.ke",
     siteName: "Book A Chef",
     locale: "en_KE",

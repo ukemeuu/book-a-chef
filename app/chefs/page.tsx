@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { ChefHat, ArrowRight } from "lucide-react";
+import { ChefHat } from "lucide-react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -8,15 +8,19 @@ import ChefGrid from "@/components/chef/ChefGrid";
 export const metadata = {
   title: "Browse Chefs | Book A Chef Kenya",
   description:
-    "Browse verified private chefs across Kenya. Filter by cuisine, location, price, and availability — then book directly.",
+    "Browse verified private chefs across Kenya. See what they cook and contact them directly by phone or WhatsApp.",
   openGraph: {
     title: "Browse Chefs | Book A Chef Kenya",
     description:
-      "Discover verified private chefs across Kenya. View menus, reviews, and availability — then book directly.",
+      "Discover verified private chefs across Kenya. View their menus and contact them directly.",
   },
 };
 
-function ChefsContent() {
+function ChefsContent({
+  searchParams,
+}: {
+  searchParams: { cuisine?: string; location?: string; search?: string };
+}) {
   return (
     <div className="min-h-screen bg-cream-50 text-forest-950 font-sans">
       <Navbar />
@@ -25,35 +29,40 @@ function ChefsContent() {
         {/* Header */}
         <div className="mb-8">
           <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-            Marketplace
+            Directory
           </p>
           <h1 className="text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
             Browse chefs
           </h1>
           <p className="mt-2 text-forest-500 max-w-xl">
-            Discover verified private chefs across Kenya. Filter by cuisine,
-            location, and price — then book directly.
+            Discover verified private chefs across Kenya. See what they cook,
+            then call or WhatsApp them directly.
           </p>
         </div>
 
-        <ChefGrid />
+        <ChefGrid
+          initialFilters={{
+            cuisine: searchParams.cuisine || "",
+            location: searchParams.location || "",
+            search: searchParams.search || "",
+          }}
+        />
 
         {/* Bottom CTA */}
         <div className="mt-16 bg-forest-950 rounded-2xl p-8 sm:p-12 text-center">
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
-            Can&apos;t find the right chef?
+            Are you a private chef?
           </h2>
           <p className="text-cream-200/70 text-sm sm:text-base mb-6 max-w-lg mx-auto">
-            Tell us what you need and we&apos;ll match you with a chef who fits
-            your event.
+            Join the directory and let customers reach you directly. Apply once
+            — our team verifies your profile before it goes live.
           </p>
           <Link
-            href="/request"
+            href="/apply"
             className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 font-bold text-sm transition-all active:scale-95"
           >
             <ChefHat className="h-4 w-4" />
-            Request a chef
-            <ArrowRight className="h-4 w-4" />
+            Apply to join
           </Link>
         </div>
       </main>
@@ -63,7 +72,11 @@ function ChefsContent() {
   );
 }
 
-export default function ChefsPage() {
+export default function ChefsPage({
+  searchParams,
+}: {
+  searchParams: { cuisine?: string; location?: string; search?: string };
+}) {
   return (
     <Suspense
       fallback={
@@ -75,7 +88,7 @@ export default function ChefsPage() {
         </div>
       }
     >
-      <ChefsContent />
+      <ChefsContent searchParams={searchParams} />
     </Suspense>
   );
 }

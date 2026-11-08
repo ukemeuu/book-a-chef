@@ -6,16 +6,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Shield,
-  Users,
   ChefHat,
-  DollarSign,
   CheckCircle2,
-  XCircle,
-  TrendingUp,
-  Calendar,
   Sparkles,
   Search,
-  Filter,
   Eye,
   Phone,
   Mail,
@@ -27,28 +21,18 @@ import {
   Plus,
   Image as ImageIcon,
   Award,
-  Utensils,
   X,
-  Trash2,
-  Car,
-  MessageCircle,
-  Send,
   Check,
   ExternalLink,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { Booking } from "@/utils/data";
 import { createClient } from "@/utils/supabase/client";
 import {
   applicationCompleteness,
   unpackApplicationMeta,
 } from "@/utils/chefApplication";
-import {
-  resolveCommission,
-  LEGACY_CHEF_PAYOUT_RATE,
-  CommissionResolution,
-} from "@/utils/commission";
+import { chefAvatar } from "@/utils/marketplace";
 
 const ALL_CUISINES = [
   "Swahili",
@@ -67,14 +51,15 @@ const ALL_CUISINES = [
 
 const ALL_DIETARY = ["Halal", "Vegetarian", "Vegan", "Gluten-Free", "Keto", "Pescatarian"];
 
+type AdminTab = "overview" | "chefs" | "applications";
+
 export default function AdminPortalPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "dispatch" | "applications" | "bookings" | "chefs">("overview");
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
 
   const [applications, setApplications] = useState<any[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [chefs, setChefs] = useState<any[]>([]);
   const [unlinkedChefs, setUnlinkedChefs] = useState<any[]>([]);
   const [appStatusFilter, setAppStatusFilter] = useState<"pending" | "approved" | "all">("pending");
@@ -84,84 +69,6 @@ export default function AdminPortalPage() {
     message: string;
     whatsappUrl?: string | null;
   } | null>(null);
-
-  // Uber Dispatch State
-  const [dispatchFilter, setDispatchFilter] = useState<"all" | "pending" | "assigned" | "active">("all");
-  const [selectedChefForBooking, setSelectedChefForBooking] = useState<{ [bookingId: string]: string }>({});
-  const [assigningId, setAssigningId] = useState<string | null>(null);
-  // Real platform rate. Stays on the legacy fallback (and flagged indicative)
-  // until an admin approves and activates a rate in platform_settings.
-  const [commission, setCommission] = useState<CommissionResolution>({
-    chefPayoutRate: LEGACY_CHEF_PAYOUT_RATE,
-    platformRate: 1 - LEGACY_CHEF_PAYOUT_RATE,
-    source: "legacy",
-    isIndicative: true,
-  });
-
-  const handleAssignChef = async (bookingId: string) => {
-    const chefId = selectedChefForBooking[bookingId];
-    if (!chefId) {
-      alert("Please select a verified chef from the dropdown first.");
-      return;
-    }
-    const assignedChef = chefs.find((c) => c.id === chefId);
-    if (assignedChef && !assignedChef.userId) {
-      alert(
-        `${assignedChef.name} has no login account, so they cannot accept this job. Link a login first.`
-      );
-      return;
-    }
-    setAssigningId(bookingId);
-    try {
-      const { data: assignedRows, error } = await supabase
-        .from("bookings")
-        .update({
-          chef_id: chefId,
-          status: "assigned",
-          assigned_at: new Date().toISOString(),
-        })
-        // Only take an unassigned request, or reassign one this chef already
-        // owns. Without the guard two admins can double-assign a booking.
-        .in("status", ["pending_assignment", "pending", "assigned", "declined"])
-        .eq("id", bookingId)
-        .select("id");
-
-      if (error) {
-        alert(error.message);
-        return;
-      }
-      if (!assignedRows || assignedRows.length === 0) {
-        alert(
-          "This booking changed while you were looking at it (it may already be accepted or cancelled). Reload and try again."
-        );
-        return;
-      }
-
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === bookingId
-            ? { ...b, chefId, chefName: assignedChef?.name || "Assigned Chef", status: "assigned" }
-            : b
-        )
-      );
-      alert(`Chef ${assignedChef?.name} assigned to booking #${bookingId}!`);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setAssigningId(null);
-    }
-  };
-
-  const handleUpdateBookingStatus = async (bookingId: string, newStatus: any) => {
-    try {
-      await supabase.from("bookings").update({ status: newStatus }).eq("id", bookingId);
-      setBookings((prev) =>
-        prev.map((b) => (b.id === bookingId ? { ...b, status: newStatus } : b))
-      );
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   // Listing modal state
   const [isListingModalOpen, setIsListingModalOpen] = useState(false);
@@ -196,10 +103,10 @@ export default function AdminPortalPage() {
   const [tagline, setTagline] = useState("Book A Chef Certified Master");
   const [city, setCity] = useState("Nairobi");
   const [pricePerGuest, setPricePerGuest] = useState("4500");
-  const [avatarUrl, setAvatarUrl] = useState("https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&q=80&w=800");
-  const [coverDishUrl, setCoverDishUrl] = useState("https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&q=80&w=2070");
-  const [dishPhoto1, setDishPhoto1] = useState("https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=1200");
-  const [dishPhoto2, setDishPhoto2] = useState("https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=1200");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [coverDishUrl, setCoverDishUrl] = useState("");
+  const [dishPhoto1, setDishPhoto1] = useState("");
+  const [dishPhoto2, setDishPhoto2] = useState("");
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>(["Swahili", "Seafood"]);
   const [selectedDietary, setSelectedDietary] = useState<string[]>(["Halal"]);
   const [bio, setBio] = useState("");
@@ -238,7 +145,7 @@ export default function AdminPortalPage() {
 
         setIsAdmin(true);
 
-        // 1. Fetch chefs first to reconcile live accounts
+        // 1. Fetch chefs.
         const { data: dbChefs } = await supabase
           .from("chefs")
           .select("*")
@@ -269,20 +176,17 @@ export default function AdminPortalPage() {
             bio: c.bio || "",
             culinaryPhilosophy: c.culinary_philosophy || "",
             verified: c.verified ?? true,
-            certificationBadge: "Book A Chef Certified • Meal Tasted & Approved",
             featured: c.featured ?? false,
             isAvailable: c.is_available ?? false,
+            phone: c.phone || null,
+            slug: c.slug || null,
             menus: [],
             reviews: [],
           }));
           setChefs(mapped);
         }
 
-        // 2. Fetch applications from Supabase
-        // Resolve the platform rate alongside. Never throws — on failure it
-        // returns the legacy split marked indicative.
-        setCommission(await resolveCommission(supabase as any));
-
+        // 2. Fetch applications.
         const { data: dbApps } = await supabase
           .from("chef_applications")
           .select("*")
@@ -299,9 +203,6 @@ export default function AdminPortalPage() {
 
               const meta = unpackApplicationMeta(a.portfolio_links);
 
-              // Status comes from the row, never from a name match. Inferring
-              // "approved" by comparing strings marked applications approved
-              // that had never been reviewed.
               return {
                 id: a.id,
                 userId: a.user_id || null,
@@ -327,35 +228,6 @@ export default function AdminPortalPage() {
             })
           );
         }
-
-        // 3. Fetch bookings
-        const { data: dbBookings } = await supabase
-          .from("bookings")
-          .select("*, chefs(name)")
-          .order("created_at", { ascending: false });
-
-        if (dbBookings && dbBookings.length > 0) {
-          setBookings(
-            dbBookings.map((b: any) => ({
-              id: b.id,
-              chefId: b.chef_id,
-              chefName: b.chefs?.name || "Assigned Chef",
-              clientName: b.client_name,
-              clientEmail: b.client_email,
-              clientPhone: b.client_phone,
-              menuTitle: b.special_requests || "Private Dining Experience",
-              bookingDate: b.booking_date,
-              bookingTime: b.booking_time,
-              guestsCount: b.guests_count,
-              totalPrice: Number(b.total_price),
-              depositAmount: Number(b.deposit_amount),
-              status: b.status,
-              address: b.location_address,
-              city: b.location_city || "Nairobi",
-              createdAt: b.created_at,
-            }))
-          );
-        }
       } catch (err) {
         console.error("Admin verification error:", err);
       } finally {
@@ -378,7 +250,6 @@ export default function AdminPortalPage() {
     );
   };
 
-  // Open modal pre-filled from an application
   const mapChefRow = (c: any) => ({
     id: c.id,
     userId: c.user_id || null,
@@ -399,9 +270,10 @@ export default function AdminPortalPage() {
     bio: c.bio || "",
     culinaryPhilosophy: c.culinary_philosophy || "",
     verified: c.verified ?? true,
-    certificationBadge: "Book A Chef Certified • Meal Tasted & Approved",
     featured: c.featured ?? false,
     isAvailable: c.is_available ?? false,
+    phone: c.phone || null,
+    slug: c.slug || null,
     menus: [],
     reviews: [],
   });
@@ -419,8 +291,6 @@ export default function AdminPortalPage() {
     return data;
   };
 
-  // One click: creates or links the login account, creates the listing, seeds a
-  // menu, and returns a WhatsApp invite with a password-set link.
   const handleApproveApplication = async (app: any) => {
     setActionLoadingId(app.id);
     setAdminNotice(null);
@@ -446,7 +316,7 @@ export default function AdminPortalPage() {
         tone: "success",
         message: data.user_id
           ? `${app.fullName} is approved. Their login is ${data.email} and the invite link is ready.`
-          : `${app.fullName}'s listing was created, but no login account could be attached. Add an email and use Invite.`,
+          : `${app.fullName}'s profile was created, but no login account could be attached. Add an email and use Invite.`,
         whatsappUrl: data.whatsapp_url,
       });
     } catch (err: any) {
@@ -507,7 +377,6 @@ export default function AdminPortalPage() {
     }
   };
 
-  // Attach a legacy listing (user_id IS NULL) to a real login.
   const handleLinkChef = async (chef: any) => {
     const email = window.prompt(
       `Email address for ${chef.name}. This creates or links their login.`,
@@ -547,7 +416,6 @@ export default function AdminPortalPage() {
     }
   };
 
-  // Publish Chef to Supabase & Marketplace
   const handlePublishChef = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmittingChef(true);
@@ -581,7 +449,7 @@ export default function AdminPortalPage() {
       setChefPhone("");
       setAdminNotice({
         tone: "success",
-        message: `${chefName} has an account and a listing. Send the WhatsApp invite so they can set a password and go online.`,
+        message: `${chefName} has an account and a profile. Send the WhatsApp invite so they can set a password.`,
         whatsappUrl: data.whatsapp_url,
       });
     } catch (err: any) {
@@ -621,25 +489,9 @@ export default function AdminPortalPage() {
 
   if (!isAdmin) return null;
 
-  // GMV is the real sum of booking value. There is deliberately NO fallback
-  // figure here.
-  //
-  // This previously read `... || 1840000`, which meant that whenever the real
-  // total was zero the console silently displayed a fabricated KES 1,840,000
-  // — sitting next to a Bookings tab reading "(0)", with a commission tile
-  // derived from it. An admin console that invents revenue is worse than one
-  // that shows zero: it turns a broken pipeline into an apparently healthy
-  // business, and it hides exactly the regression worth noticing.
-  const totalGMV = bookings.reduce((sum, b) => sum + Number(b.totalPrice || 0), 0);
-
-  // Commission is only shown as a KES figure once a rate has been approved and
-  // activated. Until then the rate itself is unapproved commercial terms, so
-  // displaying a number here would contradict both the decision to leave
-  // platform_settings inactive and the "rate pending approval" wording the
-  // chef-facing screens already use.
-  const totalCommission = commission.isIndicative
-    ? null
-    : Math.round(totalGMV * commission.platformRate);
+  const pendingApplications = applications.filter(
+    (a) => a.status === "pending" || a.status === "under_review"
+  ).length;
 
   return (
     <div className="min-h-screen bg-cream-50 text-forest-950 font-sans flex flex-col">
@@ -652,9 +504,9 @@ export default function AdminPortalPage() {
             <p className="text-xs font-medium text-forest-400 uppercase tracking-wider mb-1">
               Admin
             </p>
-            <h1 className="text-3xl font-bold text-forest-950 tracking-tight">Console</h1>
+            <h1 className="text-3xl font-bold text-forest-950 tracking-tight">Directory Console</h1>
             <p className="text-forest-500 text-sm mt-1">
-              Dispatch, chef verification, and bookings.
+              Manage chef profiles and review applications.
             </p>
           </div>
           <button
@@ -683,7 +535,7 @@ export default function AdminPortalPage() {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-emerald-700"
                 >
-                  <MessageCircle className="h-3.5 w-3.5" />
+                  <Phone className="h-3.5 w-3.5" />
                   Send WhatsApp invite
                 </a>
               )}
@@ -698,45 +550,17 @@ export default function AdminPortalPage() {
         )}
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 text-left">
-          <div className="bg-white rounded-2xl border border-forest-100 p-5">
-            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">GMV</p>
-            <p className="text-xl sm:text-2xl font-bold text-forest-950">
-              {totalGMV.toLocaleString()}
-            </p>
-            <p className="text-xs text-forest-500 mt-0.5">Bookings value</p>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-forest-100 p-5">
-            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Commission</p>
-            <p className="text-xl sm:text-2xl font-bold text-forest-950">
-              {totalCommission === null ? (
-                <span className="text-forest-300">—</span>
-              ) : (
-                totalCommission.toLocaleString()
-              )}
-            </p>
-            <p className="text-xs text-forest-500 mt-0.5">
-              {commission.isIndicative ? (
-                "Rate not yet approved"
-              ) : (
-                `${Math.round(commission.platformRate * 100)}% take rate`
-              )}
-            </p>
-          </div>
-
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6 text-left">
           <div className="bg-white rounded-2xl border border-forest-100 p-5">
             <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Chefs</p>
             <p className="text-xl sm:text-2xl font-bold text-forest-950">{chefs.length}</p>
-            <p className="text-xs text-forest-500 mt-0.5">
-              {chefs.filter((c) => c.isAvailable).length} live in marketplace
-            </p>
+            <p className="text-xs text-forest-500 mt-0.5">In the directory</p>
           </div>
 
           <div className="bg-white rounded-2xl border border-forest-100 p-5">
             <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Applications</p>
             <p className="text-xl sm:text-2xl font-bold text-amber-600">
-              {applications.filter((a) => a.status === "pending").length}
+              {pendingApplications}
             </p>
             <button
               onClick={() => setActiveTab("applications")}
@@ -744,6 +568,14 @@ export default function AdminPortalPage() {
             >
               Review →
             </button>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-forest-100 p-5 col-span-2 lg:col-span-1">
+            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Missing login</p>
+            <p className="text-xl sm:text-2xl font-bold text-forest-950">
+              {unlinkedChefs.length}
+            </p>
+            <p className="text-xs text-forest-500 mt-0.5">Chefs who cannot sign in yet</p>
           </div>
         </div>
 
@@ -758,24 +590,6 @@ export default function AdminPortalPage() {
             }`}
           >
             Overview
-          </button>
-          <button
-            onClick={() => setActiveTab("dispatch")}
-            className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === "dispatch"
-                ? "border-forest-950 text-forest-950"
-                : "border-transparent text-forest-500 hover:text-forest-800"
-            }`}
-          >
-            Dispatch
-            {bookings.filter((b) => b.status === "pending_assignment" || b.status === "pending")
-              .length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-champagne-400 text-forest-950 text-[10px] font-bold">
-                {bookings.filter(
-                  (b) => b.status === "pending_assignment" || b.status === "pending"
-                ).length}
-              </span>
-            )}
           </button>
           <button
             onClick={() => setActiveTab("chefs")}
@@ -796,21 +610,11 @@ export default function AdminPortalPage() {
             }`}
           >
             Applications
-            {applications.filter((a) => a.status === "pending").length > 0 && (
+            {pendingApplications > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                {applications.filter((a) => a.status === "pending").length}
+                {pendingApplications}
               </span>
             )}
-          </button>
-          <button
-            onClick={() => setActiveTab("bookings")}
-            className={`px-1 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === "bookings"
-                ? "border-forest-950 text-forest-950"
-                : "border-transparent text-forest-500 hover:text-forest-800"
-            }`}
-          >
-            Bookings ({bookings.length})
           </button>
         </div>
 
@@ -821,53 +625,53 @@ export default function AdminPortalPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="font-sans text-2xl font-bold text-forest-950">
-                    Certified Chef Marketplace Status
+                    Chef directory
                   </h3>
-                  <p className="text-xs text-forest-500">Live active listings with certified meal tasting badges.</p>
+                  <p className="text-xs text-forest-500">Live, verified profiles.</p>
                 </div>
                 <button
                   onClick={() => setIsListingModalOpen(true)}
                   className="text-xs font-bold text-champagne-700 underline"
                 >
-                  + Add Chef
+                  + Add chef
                 </button>
               </div>
 
               <div className="space-y-4">
-                {chefs.slice(0, 3).map((c) => (
+                {chefs.slice(0, 5).map((c) => (
                   <div
                     key={c.id}
                     className="p-4 rounded-2xl bg-cream-50/70 border border-forest-100 flex items-center justify-between gap-4"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="relative h-12 w-12 rounded-2xl overflow-hidden shrink-0 border border-forest-200">
-                        <Image src={c.avatar} alt={c.name} fill className="object-cover" />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative h-12 w-12 rounded-2xl overflow-hidden shrink-0 border border-forest-200 bg-forest-950">
+                        <Image src={chefAvatar(c)} alt={c.name} fill className="object-cover" />
                       </div>
-                      <div>
-                        <span className="text-xs font-bold text-forest-950">{c.name}</span>
-                        <p className="text-[11px] text-forest-600">{c.brand} • {c.cuisines.join(", ")}</p>
-                        <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                          <span className="inline-flex items-center gap-1 text-[9px] font-black text-champagne-800 bg-champagne-100 px-2 py-0.5 rounded-full border border-champagne-300">
-                            🍳 In-House Kitchen Tasted
-                          </span>
-                          {c.haccpCertified && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-black text-sky-800 bg-sky-100 px-2 py-0.5 rounded-full border border-sky-300">
-                              🛡️ HACCP Certified
-                            </span>
-                          )}
-                          <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                            📜 Compliance Verified
-                          </span>
-                        </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-forest-950 block truncate">
+                          {c.name}
+                        </span>
+                        <p className="text-[11px] text-forest-600 truncate">
+                          {c.brand} • {c.cuisines.join(", ")}
+                        </p>
+                        {c.phone && (
+                          <p className="text-[11px] text-forest-500 truncate">{c.phone}</p>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs font-black text-forest-950">
-                        KES {c.startingPrice.toLocaleString()} / guest
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-black text-forest-950 block">
+                        {c.verified ? "● Live" : "● Unverified"}
                       </span>
-                      <span className="block text-[9px] font-bold text-emerald-700 uppercase">
-                        {c.isAvailable ? "● Live in Marketplace" : "● Hidden"}
-                      </span>
+                      {c.slug && (
+                        <Link
+                          href={`/chefs/${c.slug}`}
+                          target="_blank"
+                          className="text-[10px] font-bold text-forest-500 hover:text-forest-900 uppercase"
+                        >
+                          View
+                        </Link>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -877,30 +681,32 @@ export default function AdminPortalPage() {
             {/* Quick Admin Actions */}
             <div className="lg:col-span-4 bg-white rounded-2xl p-6 sm:p-8 border border-forest-100 shadow-sm space-y-4">
               <h3 className="font-sans text-xl font-bold text-forest-950">
-                Admin Publishing Controls
+                Admin Controls
               </h3>
               <p className="text-xs text-forest-500 leading-relaxed">
-                Only Super Admins can list and verify private chefs on Book A Chef Kenya.
+                Only Super Admins can publish and verify chefs on Book A Chef
+                Kenya.
               </p>
               <button
                 onClick={() => setIsListingModalOpen(true)}
                 className="w-full py-3.5 px-4 rounded-2xl bg-forest-900 text-cream-50 font-bold text-xs flex items-center justify-between shadow-md hover:bg-forest-800"
               >
-                <span>+ List & Publish Chef</span>
+                <span>+ Add chef</span>
                 <ArrowUpRight className="h-4 w-4" />
               </button>
               <Link
-                href="/chef-dashboard"
+                href="/chefs"
+                target="_blank"
                 className="w-full py-3.5 px-4 rounded-2xl bg-cream-100 text-forest-900 font-bold text-xs flex items-center justify-between hover:bg-cream-200"
               >
-                <span>View Chef Portal</span>
+                <span>View public directory</span>
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
             </div>
           </div>
         )}
 
-        {/* TAB 2: MANAGE CERTIFIED CHEFS */}
+        {/* TAB 2: MANAGE CHEFS */}
         {activeTab === "chefs" && (
           <div className="space-y-6 text-left">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
@@ -909,8 +715,8 @@ export default function AdminPortalPage() {
                   Chef directory ({chefs.length})
                 </h3>
                 <p className="text-xs text-forest-500">
-                  A chef only receives dispatch after their listing is linked to a
-                  login account and they switch themselves online.
+                  A chef can sign in once their profile is linked to a login
+                  account.
                 </p>
               </div>
               <button
@@ -931,9 +737,8 @@ export default function AdminPortalPage() {
                       {unlinkedChefs.length === 1 ? "" : "s"} cannot sign in
                     </p>
                     <p className="text-xs text-forest-600 mt-1 mb-3">
-                      These listings have no login account, so dispatch can never
-                      deliver a booking to them. Link an email to create the
-                      account and send an invite.
+                      These profiles have no login account. Link an email to
+                      create the account and send an invite.
                     </p>
                     <div className="space-y-2">
                       {unlinkedChefs.map((chef) => (
@@ -980,7 +785,7 @@ export default function AdminPortalPage() {
                 >
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="relative h-14 w-14 rounded-xl overflow-hidden shrink-0 border border-forest-100 bg-cream-100">
+                      <div className="relative h-14 w-14 rounded-xl overflow-hidden shrink-0 border border-forest-100 bg-forest-950">
                         {chef.avatar ? (
                           <Image src={chef.avatar} alt={chef.name} fill className="object-cover" />
                         ) : (
@@ -1018,6 +823,13 @@ export default function AdminPortalPage() {
                         </span>
                       ))}
                     </div>
+
+                    {chef.phone && (
+                      <p className="text-xs text-forest-600 flex items-center gap-1.5">
+                        <Phone className="h-3.5 w-3.5 text-forest-400" />
+                        {chef.phone}
+                      </p>
+                    )}
                   </div>
 
                   <div className="pt-4 border-t border-forest-100 space-y-2">
@@ -1074,7 +886,7 @@ export default function AdminPortalPage() {
           </div>
         )}
 
-        {/* TAB 3: INBOUND APPLICATIONS */}
+        {/* TAB 3: APPLICATIONS */}
         {activeTab === "applications" && (
           <div className="space-y-6 text-left">
             <div className="flex flex-col gap-3">
@@ -1083,7 +895,7 @@ export default function AdminPortalPage() {
                   Chef applications
                 </h3>
                 <p className="text-xs text-forest-500">
-                  Approving creates the login account, the listing, and a
+                  Approving creates the login account, the profile, and a
                   signature menu in one step, then gives you a WhatsApp invite.
                 </p>
               </div>
@@ -1091,7 +903,7 @@ export default function AdminPortalPage() {
               <div className="flex border-b border-forest-100 overflow-x-auto">
                 {(
                   [
-                    ["pending", `Pending (${applications.filter((a) => a.status === "pending" || a.status === "under_review").length})`],
+                    ["pending", `Pending (${pendingApplications})`],
                     ["approved", `Approved (${applications.filter((a) => a.status === "approved").length})`],
                     ["all", `All (${applications.length})`],
                   ] as const
@@ -1139,7 +951,7 @@ export default function AdminPortalPage() {
                         key={app.id}
                         className="bg-white rounded-2xl p-6 border border-forest-100 space-y-4"
                       >
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-2 pb-4 border-b border-forest-100">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-2 pb-4 border-b border-forest-100">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <h4 className="text-xl font-bold text-forest-950">
@@ -1216,7 +1028,6 @@ export default function AdminPortalPage() {
                             ))}
                           </div>
 
-                          {/* Verification facts captured at application time. */}
                           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-forest-100">
                             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-forest-700 bg-cream-50 px-2 py-0.5 rounded-full border border-forest-100">
                               ID:{" "}
@@ -1380,327 +1191,18 @@ export default function AdminPortalPage() {
                 </h3>
                 <p className="text-xs text-forest-500">
                   {appStatusFilter === "pending"
-                    ? "All inbound chef applications have been reviewed and qualified!"
+                    ? "All inbound chef applications have been reviewed!"
                     : "No applications found matching this status filter."}
                 </p>
               </div>
             )}
           </div>
         )}
-
-        {/* TAB: UBER DISPATCH CONSOLE */}
-        {activeTab === "dispatch" && (
-          <div className="space-y-6 text-left">
-            <div className="bg-white rounded-2xl p-6 sm:p-8 border border-forest-100 shadow-sm space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-champagne-100 text-[10px] font-black uppercase tracking-wider text-forest-950 mb-2">
-                    <Sparkles className="h-3.5 w-3.5 text-champagne-600" />
-                    <span>Uber / Gwiji Dispatch Console</span>
-                  </div>
-                  <h3 className="font-sans text-2xl sm:text-3xl font-bold text-forest-950">
-                    Live Chef Matching & Dispatch
-                  </h3>
-                  <p className="text-xs text-forest-600 mt-1">
-                    Match customer requests to verified private chefs, dispatch automated WhatsApp job alerts, and monitor service status.
-                  </p>
-                </div>
-
-                {/* Filter Pills */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setDispatchFilter("all")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                      dispatchFilter === "all"
-                        ? "bg-forest-900 text-white"
-                        : "bg-forest-50 text-forest-700 hover:bg-forest-100"
-                    }`}
-                  >
-                    All ({bookings.length})
-                  </button>
-                  <button
-                    onClick={() => setDispatchFilter("pending")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                      dispatchFilter === "pending"
-                        ? "bg-amber-500 text-white"
-                        : "bg-amber-50 text-amber-800 hover:bg-amber-100"
-                    }`}
-                  >
-                    Needs Match ({bookings.filter((b) => b.status === "pending_assignment" || b.status === "pending").length})
-                  </button>
-                  <button
-                    onClick={() => setDispatchFilter("assigned")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                      dispatchFilter === "assigned"
-                        ? "bg-champagne-600 text-white"
-                        : "bg-champagne-50 text-champagne-900 hover:bg-champagne-100"
-                    }`}
-                  >
-                    Dispatched ({bookings.filter((b) => b.status === "assigned" || b.status === "confirmed").length})
-                  </button>
-                  <button
-                    onClick={() => setDispatchFilter("active")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                      dispatchFilter === "active"
-                        ? "bg-emerald-600 text-white"
-                        : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                    }`}
-                  >
-                    En Route / Active ({bookings.filter((b) => b.status === "en_route" || b.status === "cooking" || b.status === "in_progress").length})
-                  </button>
-                </div>
-              </div>
-
-              {/* REQUESTS LIST */}
-              {bookings.length > 0 ? (
-                <div className="space-y-4">
-                  {bookings
-                    .filter((b) => {
-                      if (dispatchFilter === "pending") return b.status === "pending_assignment" || b.status === "pending";
-                      if (dispatchFilter === "assigned") return b.status === "assigned" || b.status === "confirmed";
-                      if (dispatchFilter === "active") return b.status === "en_route" || b.status === "cooking" || b.status === "in_progress";
-                      return true;
-                    })
-                    .map((b) => {
-                      const isUnassigned = !b.chefId || b.status === "pending_assignment" || b.status === "pending";
-                      const currentlySelectedChefId = selectedChefForBooking[b.id] || b.chefId || "";
-                      const assignedChefObj = chefs.find((c) => c.id === currentlySelectedChefId || c.id === b.chefId);
-
-                      const chefWaMsg = encodeURIComponent(
-                        `Hi Chef ${assignedChefObj?.name || ""}! New private dining dispatch from Book A Chef Kenya.\n\nDate: ${b.bookingDate} at ${b.bookingTime || "19:00"}\nArea: ${b.city || b.address}\nGuests: ${b.guestsCount}\nEstimated payout: KES ${Math.round(Number(b.totalPrice || 0) * 0.85).toLocaleString()}\nNotes: ${b.menuTitle || "Standard Menu"}\n\nThis job has been dispatched to you. Sign in to review and respond: https://bookachef.co.ke/chef-dashboard`
-                      );
-
-                      const clientWaMsg = encodeURIComponent(
-                        `Hi ${b.clientName}! This is Book A Chef Concierge. We have matched you with ${b.chefName || "your certified chef"} for your event on ${b.bookingDate}. View live status: https://bookachef.co.ke/request/status?id=${b.id}`
-                      );
-
-                      return (
-                        <div
-                          key={b.id}
-                          className="bg-cream-50/70 border border-forest-100 rounded-3xl p-5 sm:p-6 space-y-4 hover:border-forest-200 transition-all"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-forest-100/80 pb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-xs text-forest-950 bg-white px-2.5 py-1 rounded-xl border border-forest-100">
-                                #{b.id.slice(0, 10)}
-                              </span>
-                              <span
-                                className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                  b.status === "pending_assignment" || b.status === "pending"
-                                    ? "bg-amber-100 text-amber-800 border border-amber-300"
-                                    : b.status === "assigned"
-                                    ? "bg-champagne-200 text-forest-950 border border-champagne-400"
-                                    : b.status === "en_route"
-                                    ? "bg-blue-100 text-blue-900 border border-blue-300"
-                                    : b.status === "cooking" || b.status === "in_progress"
-                                    ? "bg-purple-100 text-purple-900 border border-purple-300"
-                                    : "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                }`}
-                              >
-                                {b.status === "pending_assignment"
-                                  ? "Awaiting Chef Match"
-                                  : b.status === "assigned"
-                                  ? "Chef Assigned"
-                                  : b.status === "en_route"
-                                  ? "Chef En Route"
-                                  : b.status === "cooking" || b.status === "in_progress"
-                                  ? "Cooking in Kitchen"
-                                  : b.status}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-forest-500 font-medium">Booking value:</span>
-                              <strong className="text-forest-950 font-black">
-                                {/* No fallback figure. This previously rendered a
-                                    hardcoded "18,000" for any booking with a zero
-                                    or missing total, inventing revenue per row. */}
-                                {b.totalPrice
-                                  ? `KES ${Number(b.totalPrice).toLocaleString()}`
-                                  : "Not recorded"}
-                              </strong>
-                            </div>
-                          </div>
-
-                          {/* Event Specs Grid */}
-                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                            <div className="bg-white p-3 rounded-2xl border border-forest-100/60">
-                              <span className="text-[10px] uppercase font-bold text-forest-400 block">Diner</span>
-                              <strong className="text-forest-950 mt-0.5 block">{b.clientName}</strong>
-                              <span className="text-[11px] text-forest-600 block">{b.clientPhone}</span>
-                            </div>
-
-                            <div className="bg-white p-3 rounded-2xl border border-forest-100/60">
-                              <span className="text-[10px] uppercase font-bold text-forest-400 block">Date & Time</span>
-                              <strong className="text-forest-950 mt-0.5 block">{b.bookingDate}</strong>
-                              <span className="text-[11px] text-forest-600 block">{b.bookingTime || "19:00"}</span>
-                            </div>
-
-                            <div className="bg-white p-3 rounded-2xl border border-forest-100/60">
-                              <span className="text-[10px] uppercase font-bold text-forest-400 block">Location</span>
-                              <strong className="text-forest-950 mt-0.5 block truncate">{b.city || "Nairobi"}</strong>
-                              <span className="text-[11px] text-forest-600 block truncate">{b.address || "Client Residence"}</span>
-                            </div>
-
-                            <div className="bg-white p-3 rounded-2xl border border-forest-100/60">
-                              <span className="text-[10px] uppercase font-bold text-forest-400 block">Guests & Details</span>
-                              <strong className="text-forest-950 mt-0.5 block">{b.guestsCount} Guests</strong>
-                              <span className="text-[11px] text-forest-600 block truncate">{b.menuTitle || "Private Dining"}</span>
-                            </div>
-                          </div>
-
-                          {/* Matching & Dispatch Actions Bar */}
-                          <div className="pt-2 border-t border-forest-100/80 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-                            {/* Chef Selector */}
-                            <div className="flex items-center gap-2 flex-1">
-                              <select
-                                value={selectedChefForBooking[b.id] || b.chefId || ""}
-                                onChange={(e) =>
-                                  setSelectedChefForBooking((prev) => ({
-                                    ...prev,
-                                    [b.id]: e.target.value,
-                                  }))
-                                }
-                                className="bg-white border border-forest-200 rounded-xl px-3 py-2 text-xs font-bold text-forest-950 focus:outline-none focus:border-forest-900 flex-1 max-w-xs"
-                              >
-                                <option value="">Select a chef with a login…</option>
-                                {chefs.map((c) => (
-                                  <option key={c.id} value={c.id} disabled={!c.userId}>
-                                    {c.name} ({c.cuisines?.slice(0, 2).join(", ")})
-                                    {c.userId ? "" : " — no login"}
-                                  </option>
-                                ))}
-                              </select>
-
-                              <button
-                                onClick={() => handleAssignChef(b.id)}
-                                disabled={assigningId === b.id}
-                                className="px-4 py-2 bg-forest-900 hover:bg-forest-800 text-white rounded-xl font-bold text-xs transition-all shrink-0 active:scale-95 disabled:opacity-50"
-                              >
-                                {assigningId === b.id ? "Assigning..." : isUnassigned ? "Assign Chef" : "Reassign"}
-                              </button>
-                            </div>
-
-                            {/* Direct WhatsApp Dispatches */}
-                            <div className="flex flex-wrap items-center gap-2 shrink-0">
-                              <a
-                                href={`https://wa.me/254786530713?text=${chefWaMsg}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-sm"
-                              >
-                                <MessageCircle className="h-3.5 w-3.5" />
-                                <span>WhatsApp Chef</span>
-                              </a>
-
-                              <a
-                                href={
-                                  b.clientPhone
-                                    ? `https://wa.me/${b.clientPhone.replace(/\D/g, "")}?text=${clientWaMsg}`
-                                    : undefined
-                                }
-                                aria-disabled={!b.clientPhone}
-                                title={
-                                  b.clientPhone
-                                    ? undefined
-                                    : "This booking has no client phone on file"
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all ${
-                                  b.clientPhone
-                                    ? "bg-forest-100 hover:bg-forest-200 text-forest-900"
-                                    : "bg-forest-50 text-forest-300 cursor-not-allowed"
-                                } font-bold text-xs`}
-                              >
-                                <Phone className="h-3.5 w-3.5" />
-                                <span>WhatsApp Client</span>
-                              </a>
-
-                              {/* Status Switcher */}
-                              <select
-                                value={b.status}
-                                onChange={(e) => handleUpdateBookingStatus(b.id, e.target.value)}
-                                className="bg-white border border-forest-200 rounded-xl px-2.5 py-2 text-[11px] font-bold text-forest-900 focus:outline-none"
-                              >
-                                <option value="pending_assignment">Pending Assignment</option>
-                                <option value="assigned">Assigned</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="en_route">En Route 🚗</option>
-                                <option value="cooking">Cooking 👨‍🍳</option>
-                                <option value="completed">Completed 🎉</option>
-                                <option value="cancelled">Cancelled</option>
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              ) : (
-                <div className="bg-cream-50 rounded-3xl p-12 text-center border border-forest-100 space-y-2">
-                  <Sparkles className="h-10 w-10 text-champagne-500 mx-auto" />
-                  <h3 className="font-sans text-lg font-bold text-forest-950">
-                    No Inbound Requests
-                  </h3>
-                  <p className="text-xs text-forest-600">
-                    New guest requests from the Uber-style booking form will appear here for concierge dispatch.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: ALL BOOKINGS */}
-        {activeTab === "bookings" && (
-          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-forest-100 shadow-sm text-left space-y-6">
-            <h3 className="font-sans text-2xl font-bold text-forest-950">
-              Master Platform Bookings
-            </h3>
-            {bookings.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-cream-100 text-[10px] font-black uppercase tracking-wider text-forest-500 border-b border-forest-200">
-                    <tr>
-                      <th className="p-3">Diner</th>
-                      <th className="p-3">Chef</th>
-                      <th className="p-3">Date</th>
-                      <th className="p-3">Guests</th>
-                      <th className="p-3">Total Value</th>
-                      <th className="p-3">Escrow Fee</th>
-                      <th className="p-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-forest-100">
-                    {bookings.map((b) => (
-                      <tr key={b.id} className="hover:bg-cream-50">
-                        <td className="p-3 font-bold text-forest-950">{b.clientName}</td>
-                        <td className="p-3 font-medium text-forest-800">{b.chefName}</td>
-                        <td className="p-3">{b.bookingDate}</td>
-                        <td className="p-3">{b.guestsCount}</td>
-                        <td className="p-3 font-black text-forest-950">KES {b.totalPrice.toLocaleString()}</td>
-                        <td className="p-3 font-bold text-champagne-700">KES {b.depositAmount.toLocaleString()}</td>
-                        <td className="p-3">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
-                            {b.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="text-xs text-forest-500 py-6">No reservations in the database.</p>
-            )}
-          </div>
-        )}
       </main>
 
-      {/* ADMIN LISTING MODAL: CREATE / PUBLISH CERTIFIED CHEF */}
+      {/* ADD CHEF MODAL */}
       {isListingModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/80 backdrop-blur-md animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/80 backdrop-blur-md">
           <div className="relative bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 sm:p-10 space-y-6 border border-forest-100 text-left">
             <button
               onClick={() => setIsListingModalOpen(false)}
@@ -1711,15 +1213,14 @@ export default function AdminPortalPage() {
 
             <div className="space-y-1">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cream-100 text-[10px] font-black uppercase tracking-widest text-champagne-700">
-                <Award className="h-3.5 w-3.5" /> Book A Chef Official Certification
+                <Award className="h-3.5 w-3.5" /> Book A Chef Official
               </div>
               <h2 className="font-sans text-2xl sm:text-3xl font-bold text-forest-950">
                 Add a chef manually
               </h2>
               <p className="text-xs text-forest-600">
-                Creates the login account, the marketplace listing, and a first
-                menu in one step. The chef stays offline until they sign in and
-                finish their own profile.
+                Creates the login account, the public profile, and a first menu
+                in one step. Leave photos blank to use the Book A Chef logo.
               </p>
             </div>
 
@@ -1763,6 +1264,9 @@ export default function AdminPortalPage() {
                     onChange={(e) => setChefPhone(e.target.value)}
                     className="w-full bg-cream-50 border border-forest-100 rounded-xl p-3 font-medium text-forest-950 outline-none focus:border-forest-950"
                   />
+                  <p className="text-[10px] text-forest-500">
+                    Shown on the public profile for direct contact.
+                  </p>
                 </div>
 
                 <div className="space-y-1">
@@ -1805,18 +1309,18 @@ export default function AdminPortalPage() {
                 </div>
               </div>
 
-              {/* 3. Photo Uploads (Supabase Storage) */}
+              {/* 3. Photo Uploads */}
               <div className="space-y-4 pt-3 border-t border-forest-100">
                 <p className="font-black text-forest-950 uppercase tracking-widest text-[10px]">
                   📸 Chef Photos — Upload or Paste URL
                 </p>
                 <p className="text-[11px] text-forest-600">
-                  Upload from device (stored securely in Supabase) or paste a direct image URL. Placeholder chefs are marked with watermark overlays.
+                  Upload from device or paste a direct image URL. Leave blank to
+                  use the Book A Chef logo.
                 </p>
 
-                {/* Avatar Portrait */}
                 <div className="space-y-1.5">
-                  <label className="font-bold text-forest-800">Chef Portrait (in Book A Chef uniform) *</label>
+                  <label className="font-bold text-forest-800">Chef Portrait</label>
                   <div className="flex items-center gap-3">
                     {avatarUrl && (
                       <div className="relative h-14 w-14 rounded-2xl overflow-hidden shrink-0 border border-forest-200 bg-cream-100">
@@ -1850,9 +1354,8 @@ export default function AdminPortalPage() {
                   </div>
                 </div>
 
-                {/* Cover Dish Photo */}
                 <div className="space-y-1.5">
-                  <label className="font-bold text-forest-800">Signature Dish / Cover Photo *</label>
+                  <label className="font-bold text-forest-800">Signature Dish / Cover Photo</label>
                   <div className="flex items-center gap-3">
                     {coverDishUrl && (
                       <div className="relative h-14 w-20 rounded-xl overflow-hidden shrink-0 border border-forest-200 bg-cream-100">
@@ -1886,7 +1389,6 @@ export default function AdminPortalPage() {
                   </div>
                 </div>
 
-                {/* Gallery Photos */}
                 <div className="space-y-1.5">
                   <label className="font-bold text-forest-800">Gallery Dish Photos (optional)</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1965,11 +1467,11 @@ export default function AdminPortalPage() {
 
               {/* 5. Chef Biography */}
               <div className="space-y-1 pt-3 border-t border-forest-100">
-                <label className="font-bold text-forest-950">Chef Bio & Tasting Panel Endorsement *</label>
+                <label className="font-bold text-forest-950">Chef Bio *</label>
                 <textarea
                   rows={3}
                   required
-                  placeholder="Verified by Book A Chef executive panel. Executive chef pedigree, specialized dishes, and kitchen hospitality..."
+                  placeholder="Executive chef pedigree, specialized dishes, and kitchen hospitality..."
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   className="w-full bg-cream-50 border border-forest-100 rounded-2xl p-3 font-medium text-forest-950 outline-none"
@@ -2010,7 +1512,7 @@ export default function AdminPortalPage() {
                   disabled={submittingChef}
                   className="px-8 py-3.5 rounded-2xl bg-forest-900 text-cream-50 font-black text-xs uppercase tracking-widest hover:bg-forest-800 shadow-xl flex items-center gap-2"
                 >
-                  {submittingChef ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account & listing ✓"}
+                  {submittingChef ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account & profile ✓"}
                 </button>
               </div>
             </form>

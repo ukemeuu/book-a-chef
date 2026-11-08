@@ -60,7 +60,92 @@ export interface MarketplaceChef {
   service_formats: string[];
   allow_in_home: boolean;
   allow_delivery: boolean;
+  phone: string;
+  email: string;
+  instagram_handle: string;
   menus: MarketplaceMenu[];
+}
+
+/**
+ * The Book A Chef logo, used whenever a chef has not uploaded a photo.
+ * This is the same asset served as the site icon, so a listing without a
+ * portrait still shows our brand rather than a stock photo.
+ */
+export const DEFAULT_CHEF_IMAGE = "/icon.png";
+
+/** A chef's portrait, falling back to the Book A Chef logo. */
+export function chefAvatar(chef: { avatar_url?: string | null }): string {
+  return chef.avatar_url?.trim() || DEFAULT_CHEF_IMAGE;
+}
+
+/** A chef's cover image, falling back to the portrait then the logo. */
+export function chefCover(chef: {
+  cover_image_url?: string | null;
+  avatar_url?: string | null;
+}): string {
+  return chef.cover_image_url?.trim() || chef.avatar_url?.trim() || DEFAULT_CHEF_IMAGE;
+}
+
+/**
+ * Format a Kenyan phone number for display. Accepts 07…, 2547…, +2547… and
+ * raw digits, and always renders the local 07xx format.
+ */
+export function formatPhone(value?: string | null): string {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+
+  // Normalise to a 07xx local number.
+  let local = digits;
+  if (digits.startsWith("254")) local = "0" + digits.slice(3);
+  else if (digits.startsWith("00254")) local = "0" + digits.slice(5);
+
+  // Group as 07xx xxx xxx when we have 10 digits.
+  if (local.length === 10) {
+    return `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7)}`;
+  }
+  return local;
+}
+
+/** Convert any Kenyan phone input to the digits wa.me expects (2547…). */
+export function whatsappDigits(value?: string | null): string {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("254")) return digits;
+  if (digits.startsWith("00254")) return digits.slice(2);
+  if (digits.startsWith("0")) return "254" + digits.slice(1);
+  return digits;
+}
+
+/** A wa.me deep link to message a chef directly. */
+export function chefWhatsAppUrl(
+  phone?: string | null,
+  name?: string | null
+): string | null {
+  const digits = whatsappDigits(phone);
+  if (!digits) return null;
+  const text = name
+    ? `Hi ${name}, I found your profile on Book A Chef and would like to talk about a private dining booking.`
+    : "Hi, I found your profile on Book A Chef and would like to talk about a private dining booking.";
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+}
+
+/** A tel: link for click-to-call. */
+export function chefTelUrl(phone?: string | null): string | null {
+  const digits = whatsappDigits(phone);
+  return digits ? `tel:+${digits}` : null;
+}
+
+/**
+ * The number of reviews to show. `reviews_count` on the chef row is a
+ * denormalised counter that can drift from the reviews table; the actual
+ * reviews array is the source of truth.
+ */
+export function reviewCount(
+  reviews: unknown[],
+  fallbackCount?: number | null
+): number {
+  if (Array.isArray(reviews)) return reviews.length;
+  return Number(fallbackCount || 0);
 }
 
 export interface ChefAvailability {

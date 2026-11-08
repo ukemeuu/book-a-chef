@@ -356,8 +356,8 @@ export default function ApplyPage() {
               </p>
               <ol className="text-xs text-forest-600 space-y-1.5 list-decimal list-inside">
                 <li>Our team reviews your application (usually within 24 hours).</li>
-                <li>We run your certificates and schedule a test-kitchen tasting.</li>
-                <li>Once approved, your listing goes live and you can go online to receive jobs.</li>
+                <li>We check your certificates and confirm your identity.</li>
+                <li>Once approved, your profile goes live in the directory.</li>
               </ol>
             </div>
 
@@ -404,12 +404,11 @@ export default function ApplyPage() {
                 Chef onboarding
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-forest-950">
-                Cook for clients who book you directly
+                Put your cooking in front of customers
               </h1>
               <p className="text-sm text-forest-600 max-w-xl">
-                One application, one account. Set your own rate per guest, choose
-                the areas you serve, and get paid through M-Pesa after each
-                dinner.
+                One application, one profile. Show what you cook, publish your
+                phone number, and let customers contact you directly.
               </p>
             </header>
 
@@ -458,8 +457,8 @@ export default function ApplyPage() {
                       Create your chef account
                     </h2>
                     <p className="text-xs text-forest-500 mt-1">
-                      You will use this email and password to sign in, manage
-                      availability, and accept jobs.
+                      You will use this email and password to sign in and manage
+                      your public profile.
                     </p>
                   </div>
 
@@ -589,8 +588,8 @@ export default function ApplyPage() {
                       Your kitchen
                     </h2>
                     <p className="text-xs text-forest-500 mt-1">
-                      Dispatch matches requests against your cuisines, area, and
-                      budget band.
+                      Customers browse by cuisine and area — this is what helps
+                      them find you.
                     </p>
                   </div>
 
@@ -961,20 +960,20 @@ export default function ApplyPage() {
               <ul className="space-y-3 text-sm text-forest-600">
                 {[
                   {
-                    title: "Jobs, not listings",
-                    body: "Clients submit a request and we match them to you. No bidding, no public profile to maintain.",
+                    title: "A profile, not a listing",
+                    body: "Customers browse the directory and contact you directly. No dispatch, no bidding.",
                   },
                   {
                     title: "You set the rate",
-                    body: "Your per-guest price is your price. We never force a discount to win a booking.",
+                    body: "Your per-guest price is your price. Customers see it before they call.",
                   },
                   {
-                    title: "M-Pesa after every dinner",
-                    body: "The client pays into escrow up front, and you are paid out on completion.",
+                    title: "Direct contact",
+                    body: "Your phone number and WhatsApp are on your public profile. No middleman.",
                   },
                   {
-                    title: "Control your availability",
-                    body: "Go online when you want work. Block dates you are already booked.",
+                    title: "Show your menus",
+                    body: "Publish your signature menus and cuisines so customers know what you cook.",
                   },
                 ].map((item) => (
                   <li key={item.title} className="flex gap-2.5">
@@ -995,7 +994,7 @@ export default function ApplyPage() {
                 The 97% rule
               </h3>
               <p className="text-xs text-forest-600 leading-relaxed">
-                Your listing goes live at 97% profile completeness: identity,
+                Your profile goes live at 97% completeness: identity,
                 certificates, at least one menu, photos, and your service areas.
                 Your dashboard shows exactly what is missing, so nothing is a
                 mystery.

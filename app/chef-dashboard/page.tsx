@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Clock,
   ChefHat,
   Loader2,
   Phone,
@@ -13,21 +12,14 @@ import {
   Truck,
   CheckCircle2,
   ShieldCheck,
-  Lock,
   ArrowRight,
   AlertCircle,
-  FileText,
   ExternalLink,
+  Lock,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import StatusStepper from "@/components/booking/StatusStepper";
-import { Booking, Menu } from "@/utils/data";
-import {
-  resolveCommission,
-  LEGACY_CHEF_PAYOUT_RATE,
-  CommissionResolution,
-} from "@/utils/commission";
+import { Menu } from "@/utils/data";
 import { createClient } from "@/utils/supabase/client";
 import {
   calculateProfileReadiness,
@@ -37,26 +29,7 @@ import {
   ApplicationMeta,
   DEFAULT_CHEF_AVATAR,
 } from "@/utils/chefApplication";
-
-/**
- * A job offer addressed to this chef by the dispatch engine.
- *
- * Intentionally carries NO customer PII. The chef decides whether to take the
- * job from the occasion, date, area and budget alone; client name, phone, email
- * and the full street address are released only after acceptance, via the RLS
- * path that applies once the booking is genuinely theirs.
- */
-type JobOffer = {
-  id: string;
-  bookingDate: string;
-  bookingTime: string;
-  guestsCount: number;
-  totalPrice: number;
-  locationArea: string;
-  cuisineType: string;
-  serviceFormat: string;
-  specialRequests?: string;
-};
+import { chefAvatar } from "@/utils/marketplace";
 
 type PortalState = "loading" | "chef" | "applicant" | "none";
 
@@ -125,17 +98,20 @@ function mapMenu(row: any): Menu {
 const inputClass =
   "w-full px-4 py-3 rounded-xl bg-white border border-forest-200 text-sm font-medium text-forest-950 placeholder-forest-400 outline-none focus:border-forest-950 focus:ring-1 focus:ring-forest-950 transition-colors";
 
+/**
+ * Chef portal.
+ *
+ * This is where a chef manages their directory listing: identity, cuisines,
+ * menus, and contact details. There are no booking requests here — customers
+ * contact the chef directly via the phone number on their public profile.
+ */
 export default function ChefDashboardPage() {
   const router = useRouter();
   const supabase = createClient();
 
   const [portalState, setPortalState] = useState<PortalState>("loading");
   const [chef, setChef] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"bookings" | "menus" | "settings">(
-    "bookings"
-  );
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
+  const [activeTab, setActiveTab] = useState<"menus" | "settings">("menus");
   const [menus, setMenus] = useState<Menu[]>([]);
 
   const [application, setApplication] = useState<ApplicationSummary | null>(null);
@@ -146,6 +122,7 @@ export default function ChefDashboardPage() {
   }>({ percentage: 0, missing: [] });
 
   const [nationalIdNumber, setNationalIdNumber] = useState("");
+  const [phone, setPhone] = useState("");
   const [allowInHome, setAllowInHome] = useState(true);
   const [allowDelivery, setAllowDelivery] = useState(true);
   const [bio, setBio] = useState("");
@@ -153,93 +130,9 @@ export default function ChefDashboardPage() {
   const [startingPrice, setStartingPrice] = useState(4500);
   const [minGuests, setMinGuests] = useState(2);
   const [maxGuests, setMaxGuests] = useState(30);
-  const [isLive, setIsLive] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  const [commission, setCommission] = useState<CommissionResolution>({
-    chefPayoutRate: LEGACY_CHEF_PAYOUT_RATE,
-    platformRate: 1 - LEGACY_CHEF_PAYOUT_RATE,
-    source: "legacy",
-    isIndicative: true,
-  });
-  const [decliningBookingId, setDecliningBookingId] = useState<string | null>(null);
-  const [declineReason, setDeclineReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-
-  const loadWorkForChef = useCallback(
-    async (chefId: string) => {
-      const { data: dbBookings } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("chef_id", chefId)
-        .order("created_at", { ascending: false });
-
-      setBookings(
-        ((dbBookings as any[]) || []).map((b) => ({
-          id: b.id,
-          chefId: b.chef_id,
-          chefName: chef?.name || "Me",
-          clientName: b.client_name,
-          clientEmail: b.client_email,
-          clientPhone: b.client_phone,
-          menuTitle: b.special_requests || "Signature menu",
-          bookingDate: b.booking_date,
-          bookingTime: b.booking_time,
-          guestsCount: b.guests_count,
-          totalPrice: Number(b.total_price),
-          depositAmount: Number(b.deposit_amount),
-          status: b.status,
-          address: b.location_address,
-          city: b.location_city || "Nairobi",
-          specialRequests: b.special_requests,
-          serviceFormat: b.service_format || "in_home",
-          sourcingPreference: b.sourcing_preference || "chef_sourced",
-          preferredStores: b.preferred_stores || undefined,
-          receiptVerified: b.receipt_verified ?? false,
-          createdAt: b.created_at,
-        }))
-      );
-
-      // Dispatch is a push model: matchChefToBooking() assigns exactly one
-      // eligible chef at a time and sets status = 'assigned'. There is no open
-      // job board, so offers are filtered to chef_id = this chef only.
-      // Explicit columns keep client contact and the street address off the
-      // wire until the chef accepts.
-      const { data: offered } = await supabase
-        .from("bookings")
-        .select(
-          "id, booking_date, booking_time, guests_count, total_price, " +
-            "budget_per_person, location_address, location_city, " +
-            "cuisine_type, service_format, special_requests"
-        )
-        .eq("chef_id", chefId)
-        .eq("status", "assigned")
-        .order("booking_date", { ascending: true })
-        .limit(20);
-
-      setJobOffers(
-        ((offered as any[]) || []).map((b) => ({
-          id: b.id,
-          bookingDate: b.booking_date,
-          bookingTime: b.booking_time,
-          guestsCount: Number(b.guests_count || 0),
-          totalPrice:
-            Number(b.total_price) ||
-            Number(b.budget_per_person || 0) * Number(b.guests_count || 0),
-          locationArea:
-            b.location_city || String(b.location_address || "").split(",")[0],
-          cuisineType: b.cuisine_type || "",
-          serviceFormat: b.service_format || "in_home",
-          specialRequests: b.special_requests || "",
-        }))
-      );
-    },
-    // `chef` is only used for the display name on bookings, which is already
-    // available from state at render time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [supabase]
-  );
 
   const loadApplication = useCallback(async () => {
     const response = await fetch("/api/chef/application", { cache: "no-store" });
@@ -262,8 +155,6 @@ export default function ChefDashboardPage() {
     async function initChefPortal() {
       setPortalState("loading");
       try {
-        setCommission(await resolveCommission(supabase as any));
-
         const {
           data: { user },
           error: authErr,
@@ -275,8 +166,6 @@ export default function ChefDashboardPage() {
         }
         if (!active) return;
 
-        // Look up the listing by user_id first. Email is only a fallback for
-        // legacy rows an admin has linked by hand — never the primary key.
         let chefRecord: any = null;
         const { data: byUser } = await supabase
           .from("chefs")
@@ -297,9 +186,6 @@ export default function ChefDashboardPage() {
         if (!active) return;
 
         if (!chefRecord) {
-          // No listing yet. An applicant should still be able to work on their
-          // profile here instead of hitting a dead end — this is exactly where
-          // chefs used to be stranded.
           const hasApplication = await loadApplication();
           if (!active) return;
           setPortalState(hasApplication ? "applicant" : "none");
@@ -308,6 +194,7 @@ export default function ChefDashboardPage() {
 
         setChef(chefRecord);
         setNationalIdNumber(chefRecord.national_id_number || "");
+        setPhone(chefRecord.phone || "");
         setAllowInHome(chefRecord.allow_in_home ?? true);
         setAllowDelivery(chefRecord.allow_delivery ?? true);
         setBio(chefRecord.bio || "");
@@ -315,7 +202,6 @@ export default function ChefDashboardPage() {
         setStartingPrice(Number(chefRecord.price_per_guest) || 4500);
         setMinGuests(chefRecord.min_guests || 2);
         setMaxGuests(chefRecord.max_guests || 30);
-        setIsLive(chefRecord.is_available ?? false);
 
         const { data: menuRows } = await supabase
           .from("menus")
@@ -325,10 +211,6 @@ export default function ChefDashboardPage() {
         if (!active) return;
         setMenus(((menuRows as any[]) || []).map(mapMenu));
 
-        // Load the originating application so identity data captured at
-        // onboarding survives approval. Without this the readiness gate could
-        // never reach 97%: the National ID lives on the application, not the
-        // chefs row.
         const response = await fetch("/api/chef/application", {
           cache: "no-store",
         });
@@ -345,8 +227,6 @@ export default function ChefDashboardPage() {
           }
         }
 
-        await loadWorkForChef(chefRecord.id);
-        if (!active) return;
         setPortalState("chef");
       } catch (err) {
         console.error("Chef portal init error:", err);
@@ -358,89 +238,11 @@ export default function ChefDashboardPage() {
     return () => {
       active = false;
     };
-  }, [router, supabase, loadApplication, loadWorkForChef]);
-
-  const handleAcceptBooking = async (bookingId: string) => {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/bookings/${bookingId}/accept`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        // The offer becomes an accepted job with client contact visible, so
-        // reload instead of guessing the new shape in local state.
-        if (chef?.id) await loadWorkForChef(chef.id);
-      } else {
-        setSaveError(data.error || "Failed to accept booking.");
-      }
-    } catch (e: any) {
-      setSaveError("Error: " + e.message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDeclineBooking = async () => {
-    if (!decliningBookingId) return;
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/bookings/${decliningBookingId}/decline`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: declineReason }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        if (chef?.id) {
-          await loadWorkForChef(chef.id);
-        } else {
-          setJobOffers((prev) =>
-            prev.filter((o) => o.id !== decliningBookingId)
-          );
-        }
-        setDecliningBookingId(null);
-        setDeclineReason("");
-      } else {
-        setSaveError(data.error || "Failed to decline booking.");
-      }
-    } catch (e: any) {
-      setSaveError("Error: " + e.message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleMarkCompleted = async (bookingId: string) => {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/bookings/${bookingId}/complete`, {
-        method: "POST",
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || !data.success) {
-        setSaveError(data.error || "Could not mark this job as completed.");
-        return;
-      }
-
-      if (chef?.id) {
-        await loadWorkForChef(chef.id);
-      } else {
-        setBookings((prev) =>
-          prev.map((b) => (b.id === bookingId ? { ...b, status: "completed" } : b))
-        );
-      }
-    } catch (e: any) {
-      setSaveError("Error: " + e.message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  }, [router, supabase, loadApplication]);
 
   const readiness: ProfileReadinessResult = calculateProfileReadiness({
     name: chef?.name,
-    phone: chef?.phone || application?.phone,
+    phone: phone || chef?.phone || application?.phone,
     nationalIdNumber:
       nationalIdNumber || appMeta.national_id_number || undefined,
     avatar: chef?.avatar_url || chef?.avatar,
@@ -465,49 +267,6 @@ export default function ChefDashboardPage() {
     menus,
   });
 
-  const handleToggleLiveStatus = async () => {
-    if (!readiness.canGoLive && !isLive) {
-      setSaveError(
-        `Cannot go online: your profile is ${readiness.percentage}% complete. 97% is required.`
-      );
-      return;
-    }
-    setActionLoading(true);
-    setSaveError(null);
-    setSaveSuccess(null);
-    try {
-      const nextLive = !isLive;
-      const res = await fetch("/api/chef/update-profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chef_id: chef.id,
-          requested_live_status: nextLive,
-          national_id_number: nationalIdNumber,
-          allow_in_home: allowInHome,
-          allow_delivery: allowDelivery,
-          bio,
-          tagline,
-          price_per_guest: startingPrice,
-          min_guests: minGuests,
-          max_guests: maxGuests,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update");
-      setIsLive(nextLive);
-      setSaveSuccess(
-        nextLive
-          ? "You're online and receiving dispatch requests."
-          : "You're offline. No new jobs will be sent to you."
-      );
-    } catch (err: any) {
-      setSaveError(err.message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setActionLoading(true);
@@ -519,6 +278,7 @@ export default function ChefDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chef_id: chef.id,
+          phone,
           national_id_number: nationalIdNumber,
           allow_in_home: allowInHome,
           allow_delivery: allowDelivery,
@@ -582,7 +342,7 @@ export default function ChefDashboardPage() {
                 href="/apply"
                 className="w-full inline-flex items-center justify-center gap-2 bg-forest-950 text-white py-3.5 rounded-xl font-bold text-sm hover:bg-forest-800 transition-colors"
               >
-                Apply to cook with us
+                Apply to join the directory
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <a
@@ -601,54 +361,17 @@ export default function ChefDashboardPage() {
     );
   }
 
-  // "assigned" rows are offers awaiting this chef's response and are rendered
-  // from `jobOffers` above, so they are excluded here to avoid double-listing.
-  const activeBookings = bookings.filter(
-    (b) => b.status !== "pending_assignment" && b.status !== "assigned"
-  );
-  const completedBookings = bookings.filter(
-    (b) => b.status === "confirmed" || b.status === "completed"
-  );
-  const totalEarned = completedBookings.reduce(
-    (sum, b) => sum + b.totalPrice * commission.chefPayoutRate,
-    0
-  );
-
-  const statusBadge = (status: string) => {
-    if (status === "confirmed") return "bg-emerald-100 text-emerald-800";
-    if (status === "chef_accepted") return "bg-blue-100 text-blue-800";
-    if (status === "completed") return "bg-cream-100 text-forest-700";
-    if (status === "declined" || status.includes("cancelled"))
-      return "bg-red-100 text-red-800";
-    if (status === "pending_assignment") return "bg-amber-100 text-amber-800";
-    return "bg-cream-100 text-forest-700";
-  };
-
-  const statusLabel = (status: string) => {
-    const map: Record<string, string> = {
-      pending_assignment: "Open request",
-      assigned: "Offered to you",
-      chef_accepted: "Accepted",
-      confirmed: "Confirmed",
-      completed: "Completed",
-      declined: "Declined",
-      cancelled_by_customer: "Cancelled",
-      cancelled_by_chef: "Cancelled",
-    };
-    return map[status] || status.replace(/_/g, " ");
-  };
-
   return (
     <div className="min-h-screen bg-cream-50 text-forest-950 font-sans flex flex-col">
       <Navbar />
 
       <main className="max-w-5xl mx-auto w-full px-4 pt-24 pb-16 flex-1">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
-            <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-cream-100 shrink-0">
+            <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-forest-950 shrink-0 flex items-center justify-center">
               <Image
-                src={chef?.avatar_url || DEFAULT_CHEF_AVATAR}
+                src={chefAvatar(chef)}
                 alt={chef?.name || "Chef"}
                 fill
                 className="object-cover"
@@ -673,72 +396,15 @@ export default function ChefDashboardPage() {
             </div>
           </div>
 
-          {/* Live toggle */}
-          <button
-            onClick={handleToggleLiveStatus}
-            disabled={!readiness.canGoLive || actionLoading}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0 ${
-              !readiness.canGoLive
-                ? "bg-cream-100 text-forest-500 cursor-not-allowed border border-forest-200"
-                : isLive
-                ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                : "bg-forest-950 text-white hover:bg-forest-800"
+          <div
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${
+              chef?.verified
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-amber-50 text-amber-700"
             }`}
           >
-            {!readiness.canGoLive ? (
-              <>
-                <Lock className="h-4 w-4" />
-                {readiness.percentage}% — locked
-              </>
-            ) : isLive ? (
-              <>
-                <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-                Online
-              </>
-            ) : (
-              <>
-                <span className="h-2 w-2 rounded-full bg-cream-300" />
-                Offline
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-2xl border border-forest-100 p-4">
-            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-              Earnings
-            </p>
-            <p className="text-lg sm:text-xl font-bold text-forest-950">
-              {commission.isIndicative ? "~KES " : "KES "}
-              {Math.round(totalEarned).toLocaleString()}
-            </p>
-            {commission.isIndicative && (
-              <p className="text-[10px] text-forest-400 mt-0.5">
-                Estimate — rate pending
-              </p>
-            )}
-          </div>
-          <div className="bg-white rounded-2xl border border-forest-100 p-4">
-            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-              Active
-            </p>
-            <p className="text-lg sm:text-xl font-bold text-forest-950">
-              {
-                bookings.filter(
-                  (b) => b.status === "confirmed" || b.status === "chef_accepted"
-                ).length
-              }
-            </p>
-          </div>
-          <div className="bg-white rounded-2xl border border-forest-100 p-4">
-            <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-              Awaiting response
-            </p>
-            <p className="text-lg sm:text-xl font-bold text-amber-600">
-              {jobOffers.length}
-            </p>
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {chef?.verified ? "Verified" : "Verification pending"}
           </div>
         </div>
 
@@ -783,6 +449,12 @@ export default function ChefDashboardPage() {
               ))}
             </div>
           )}
+          {readiness.canGoLive && (
+            <p className="mt-3 text-xs text-emerald-700 font-medium flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Your profile is complete and visible in the directory.
+            </p>
+          )}
         </div>
 
         {saveSuccess && (
@@ -798,16 +470,6 @@ export default function ChefDashboardPage() {
 
         {/* Tabs */}
         <div className="flex border-b border-forest-100 mb-6 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab("bookings")}
-            className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === "bookings"
-                ? "border-forest-950 text-forest-950"
-                : "border-transparent text-forest-500 hover:text-forest-800"
-            }`}
-          >
-            Requests ({jobOffers.length + activeBookings.length})
-          </button>
           <button
             onClick={() => setActiveTab("menus")}
             className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
@@ -834,236 +496,6 @@ export default function ChefDashboardPage() {
             )}
           </button>
         </div>
-
-        {/* REQUESTS TAB */}
-        {activeTab === "bookings" && (
-          <div className="space-y-6">
-            {jobOffers.length > 0 && (
-              <section>
-                <div className="flex items-center gap-2 mb-3">
-                  <h2 className="text-sm font-bold text-forest-950">
-                    Offered to you
-                  </h2>
-                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-medium">
-                    {jobOffers.length}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {jobOffers.map((offer) => (
-                    <div
-                      key={offer.id}
-                      className="bg-white rounded-2xl border border-amber-200 p-5"
-                    >
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div>
-                          <p className="font-bold text-forest-950">
-                            {offer.cuisineType
-                              ? `${offer.cuisineType} private dining`
-                              : "Private dining request"}
-                          </p>
-                          <p className="text-xs text-forest-500">
-                            {offer.bookingDate} at {offer.bookingTime} •{" "}
-                            {offer.guestsCount} guests
-                          </p>
-                        </div>
-                        <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-medium shrink-0">
-                          Awaiting your response
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-                        <div>
-                          <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-                            Area
-                          </p>
-                          <p className="text-sm font-medium text-forest-950 truncate">
-                            {offer.locationArea}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-                            Format
-                          </p>
-                          <p className="text-sm font-medium text-forest-950">
-                            {offer.serviceFormat === "delivery"
-                              ? "Delivery"
-                              : "In-home"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-                            Your earnings
-                          </p>
-                          <p className="text-sm font-bold text-forest-950">
-                            {commission.isIndicative ? "~KES " : "KES "}
-                            {Math.round(
-                              offer.totalPrice * commission.chefPayoutRate
-                            ).toLocaleString()}
-                          </p>
-                          {commission.isIndicative && (
-                            <p className="text-[10px] text-forest-400 mt-0.5">
-                              Estimate — rate pending approval
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {offer.specialRequests && (
-                        <div className="mb-4 p-3 rounded-xl bg-cream-50 border border-forest-100">
-                          <p className="text-xs text-forest-700">
-                            {offer.specialRequests}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setDecliningBookingId(offer.id)}
-                          className="px-4 py-2.5 rounded-xl border border-forest-200 text-sm font-medium text-forest-700 hover:bg-cream-50 transition-colors"
-                        >
-                          Decline
-                        </button>
-                        <button
-                          disabled={actionLoading}
-                          onClick={() => handleAcceptBooking(offer.id)}
-                          className="flex-1 px-4 py-2.5 rounded-xl bg-forest-950 text-white text-sm font-medium hover:bg-forest-800 transition-colors disabled:opacity-50 flex items-center justify-center"
-                        >
-                          {actionLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            "Accept job"
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {activeBookings.length > 0 && (
-              <section>
-                <h2 className="text-sm font-bold text-forest-950 mb-3">
-                  Your bookings
-                </h2>
-                <div className="space-y-3">
-                  {activeBookings.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="bg-white rounded-2xl border border-forest-100 p-5"
-                    >
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div>
-                          <p className="font-bold text-forest-950">
-                            {booking.clientName}
-                          </p>
-                          <p className="text-xs text-forest-500">
-                            {booking.bookingDate} at {booking.bookingTime} •{" "}
-                            {booking.guestsCount} guests
-                          </p>
-                        </div>
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-medium shrink-0 ${statusBadge(
-                            booking.status
-                          )}`}
-                        >
-                          {statusLabel(booking.status)}
-                        </span>
-                      </div>
-
-                      <div className="mb-4">
-                        <StatusStepper status={booking.status} />
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-                        <div>
-                          <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-                            Client
-                          </p>
-                          <p className="text-sm font-medium text-forest-950">
-                            {booking.clientPhone}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-                            Address
-                          </p>
-                          <p className="text-sm font-medium text-forest-950 truncate">
-                            {booking.address}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-medium text-forest-400 uppercase mb-1">
-                            Earnings
-                          </p>
-                          <p className="text-sm font-bold text-forest-950">
-                            {commission.isIndicative ? "~KES " : "KES "}
-                            {Math.round(
-                              booking.totalPrice * commission.chefPayoutRate
-                            ).toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 pt-4 border-t border-forest-100">
-                        <a
-                          href={`https://wa.me/${
-                            booking.clientPhone?.replace(/[^0-9]/g, "") || ""
-                          }?text=${encodeURIComponent(
-                            `Hi ${booking.clientName}, this is your chef for booking #${booking.id
-                              .slice(0, 8)
-                              .toUpperCase()} on ${booking.bookingDate}.`
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2"
-                        >
-                          <Phone className="h-4 w-4" />
-                          WhatsApp client
-                        </a>
-
-                        {booking.status === "confirmed" && (
-                          <button
-                            onClick={() => handleMarkCompleted(booking.id)}
-                            disabled={actionLoading}
-                            className="px-4 py-2.5 rounded-xl bg-forest-950 text-white text-sm font-medium hover:bg-forest-800 transition-colors disabled:opacity-50"
-                          >
-                            Mark completed
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {bookings.length === 0 && jobOffers.length === 0 && (
-              <div className="bg-white rounded-2xl border border-forest-100 p-12 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-cream-100 flex items-center justify-center mx-auto mb-4">
-                  <ChefHat className="h-6 w-6 text-forest-400" />
-                </div>
-                <h3 className="text-lg font-bold text-forest-950 mb-1">
-                  No requests yet
-                </h3>
-                <p className="text-sm text-forest-500 max-w-sm mx-auto">
-                  {isLive
-                    ? "You're online. Requests that match your cuisines, area and rate will appear here — usually within a few days."
-                    : "Go online when you're ready to take work. Dispatch only sends jobs to chefs who are online and have a complete profile."}
-                </p>
-                {!isLive && readiness.canGoLive && (
-                  <button
-                    onClick={handleToggleLiveStatus}
-                    disabled={actionLoading}
-                    className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-forest-950 text-white text-sm font-medium hover:bg-forest-800 disabled:opacity-50"
-                  >
-                    Go online
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* MENUS TAB */}
         {activeTab === "menus" && (
@@ -1093,9 +525,9 @@ export default function ChefDashboardPage() {
                   No menus yet
                 </p>
                 <p className="text-xs text-forest-500 max-w-sm mx-auto">
-                  A menu is part of the 97% go-live checklist. Our team creates
-                  your first signature menu when your application is approved; you
-                  can edit it here afterwards.
+                  A menu is part of the profile checklist. Our team creates your
+                  first signature menu when your application is approved; you can
+                  edit it here afterwards.
                 </p>
               </div>
             )}
@@ -1129,6 +561,34 @@ export default function ChefDashboardPage() {
                 </div>
               </section>
             )}
+
+            <section className="bg-white rounded-2xl border border-forest-100 p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <Phone className="h-4 w-4 text-forest-700" />
+                <h2 className="text-lg font-bold text-forest-950">
+                  Contact number
+                </h2>
+              </div>
+              <p className="text-sm text-forest-500 mb-5">
+                This is the number customers see on your public profile. Use a
+                WhatsApp-capable Kenyan number.
+              </p>
+              <label className="block text-sm font-medium text-forest-950 mb-1.5">
+                Phone / WhatsApp
+              </label>
+              <input
+                type="tel"
+                required
+                placeholder="0712 345 678"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className={inputClass + " max-w-sm"}
+              />
+              <p className="text-xs text-forest-400 mt-1.5">
+                Shown on your profile so customers can call or message you
+                directly.
+              </p>
+            </section>
 
             <section className="bg-white rounded-2xl border border-forest-100 p-6">
               <div className="flex items-center gap-2 mb-1">
@@ -1305,51 +765,6 @@ export default function ChefDashboardPage() {
         )}
       </main>
 
-      {/* DECLINE MODAL */}
-      {decliningBookingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-forest-950 mb-2">
-              Pass on this request?
-            </h3>
-            <p className="text-sm text-forest-500 mb-5">
-              We&apos;ll offer it to another available chef.
-            </p>
-            <div className="mb-5">
-              <label className="block text-sm font-medium text-forest-950 mb-1.5">
-                Reason (optional)
-              </label>
-              <textarea
-                rows={2}
-                placeholder="e.g. Booked that evening…"
-                value={declineReason}
-                onChange={(e) => setDeclineReason(e.target.value)}
-                className={inputClass + " resize-none"}
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDecliningBookingId(null)}
-                className="flex-1 py-3 rounded-xl border border-forest-200 text-sm font-medium text-forest-700 hover:bg-cream-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={actionLoading}
-                onClick={handleDeclineBooking}
-                className="flex-1 py-3 rounded-xl bg-forest-950 text-white text-sm font-medium hover:bg-forest-800 transition-colors disabled:opacity-50"
-              >
-                {actionLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Pass"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <Footer />
     </div>
   );
@@ -1441,7 +856,7 @@ function ApplicantWorkspace({
     status === "approved"
       ? {
           title: "You're approved",
-          body: "Your partner listing is being prepared. Refresh in a moment — if it still does not appear, message the onboarding team.",
+          body: "Your listing is being prepared. Refresh in a moment — if it still does not appear, message the onboarding team.",
           tone: "emerald",
         }
       : isRejected
@@ -1453,7 +868,7 @@ function ApplicantWorkspace({
       : status === "under_review"
       ? {
           title: "Application under review",
-          body: "Our culinary team is checking your certificates and schedule. You will hear from us on WhatsApp.",
+          body: "Our team is checking your certificates and schedule. You will hear from us on WhatsApp.",
           tone: "amber",
         }
       : {
@@ -1491,7 +906,7 @@ function ApplicantWorkspace({
             {statusCopy.tone === "emerald" ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-700 shrink-0 mt-0.5" />
             ) : (
-              <Clock className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+              <Lock className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
             )}
             <div>
               <p className="text-sm font-bold text-forest-950">
@@ -1576,13 +991,16 @@ function ApplicantWorkspace({
             </div>
             <div>
               <label className="block text-xs font-bold text-forest-950 mb-1.5">
-                Phone / M-Pesa
+                Phone / WhatsApp
               </label>
               <input
                 className={inputClass}
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
+              <p className="text-[11px] text-forest-400 mt-1">
+                This is the number customers see on your public profile.
+              </p>
             </div>
             <div>
               <label className="block text-xs font-bold text-forest-950 mb-1.5">
@@ -1762,7 +1180,7 @@ function ApplicantWorkspace({
 
         <section className="bg-white rounded-2xl border border-forest-100 p-5 space-y-2">
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-forest-700" />
+            <ShieldCheck className="h-4 w-4 text-forest-700" />
             <p className="text-sm font-bold text-forest-950">
               What we check before approval
             </p>

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Star,
@@ -10,46 +9,45 @@ import {
   BadgeCheck,
   Heart,
   Share2,
-  Home,
-  Truck,
-  Clock,
-  Calendar,
-  ArrowRight,
   Phone,
   MessageCircle,
   ShieldCheck,
   Award,
+  ChefHat,
+  Mail,
+  Instagram,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import MenuCard from "@/components/chef/MenuCard";
 import ReviewCard from "@/components/chef/ReviewCard";
-import AvailabilityCalendar from "@/components/chef/AvailabilityCalendar";
 import {
   MarketplaceChef,
   MarketplaceReview,
-  ChefAvailability,
-  BlockedDate,
-  formatPrice,
-  serviceFormatLabel,
-  DAY_NAMES,
+  chefAvatar,
+  chefCover,
+  chefTelUrl,
+  chefWhatsAppUrl,
+  formatPhone,
+  reviewCount,
 } from "@/utils/marketplace";
 import { createClient } from "@/utils/supabase/client";
 
 interface ChefProfileClientProps {
   chef: MarketplaceChef;
   reviews: MarketplaceReview[];
-  availability: ChefAvailability | null;
-  blockedDates: BlockedDate[];
-  busyDates: string[];
 }
 
+/**
+ * Public chef profile — a directory listing, not a booking page.
+ *
+ * Customers see who the chef is, what they cook, and how to reach them
+ * directly. There is no booking form, no availability calendar, and no
+ * payment flow: the phone number and WhatsApp button are the call to action.
+ */
 export default function ChefProfileClient({
   chef,
   reviews,
-  availability,
-  blockedDates,
-  busyDates,
 }: ChefProfileClientProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -110,8 +108,12 @@ export default function ChefProfileClient({
     }
   };
 
-  const cover = chef.cover_image_url || chef.avatar_url;
+  const cover = chefCover(chef);
+  const avatar = chefAvatar(chef);
   const gallery = (chef.gallery_images || []).filter(Boolean);
+  const actualReviews = reviewCount(reviews, chef.reviews_count);
+  const whatsappUrl = chefWhatsAppUrl(chef.phone, chef.name);
+  const telUrl = chefTelUrl(chef.phone);
 
   return (
     <div className="min-h-screen bg-cream-50 text-forest-950 font-sans">
@@ -119,7 +121,7 @@ export default function ChefProfileClient({
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
         {/* ── COVER ── */}
-        <div className="relative aspect-[21/9] rounded-2xl overflow-hidden bg-cream-100 mb-6">
+        <div className="relative aspect-[21/9] rounded-2xl overflow-hidden bg-forest-950 mb-6">
           <Image
             src={cover}
             alt={chef.name}
@@ -129,7 +131,7 @@ export default function ChefProfileClient({
             className="object-cover"
           />
           <div
-            className="absolute inset-0 bg-gradient-to-t from-forest-950/40 via-transparent to-transparent"
+            className="absolute inset-0 bg-gradient-to-t from-forest-950/50 via-transparent to-transparent"
             aria-hidden="true"
           />
         </div>
@@ -138,9 +140,9 @@ export default function ChefProfileClient({
         <div className="bg-white rounded-2xl border border-forest-100 p-6 sm:p-8 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-start gap-5">
             {/* Avatar */}
-            <div className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-white shadow-lg shrink-0 -mt-16 sm:-mt-12 bg-cream-100">
+            <div className="relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-white shadow-lg shrink-0 -mt-16 sm:-mt-12 bg-forest-950 flex items-center justify-center">
               <Image
-                src={chef.avatar_url}
+                src={avatar}
                 alt={chef.name}
                 fill
                 sizes="96px"
@@ -176,10 +178,10 @@ export default function ChefProfileClient({
                   <span className="font-bold text-forest-950">
                     {Number(chef.rating || 0).toFixed(1)}
                   </span>
-                  {chef.reviews_count > 0 && (
+                  {actualReviews > 0 && (
                     <span className="text-forest-400">
-                      ({chef.reviews_count} review
-                      {chef.reviews_count === 1 ? "" : "s"})
+                      ({actualReviews} review
+                      {actualReviews === 1 ? "" : "s"})
                     </span>
                   )}
                 </span>
@@ -193,20 +195,6 @@ export default function ChefProfileClient({
                     {chef.experience_years}+ years
                   </span>
                 )}
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-                    chef.is_available
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-cream-100 text-forest-500"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      chef.is_available ? "bg-emerald-500 animate-pulse" : "bg-forest-300"
-                    }`}
-                  />
-                  {chef.is_available ? "Available now" : "Not available"}
-                </span>
               </div>
             </div>
 
@@ -241,36 +229,101 @@ export default function ChefProfileClient({
           )}
         </div>
 
-        {/* ── BOOKING CTA ── */}
-        <div className="bg-forest-950 rounded-2xl p-6 sm:p-8 mb-6 text-white">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* ── CONTACT ── */}
+        <section className="bg-forest-950 rounded-2xl p-6 sm:p-8 mb-6 text-white">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-champagne-400 mb-1">
-                Book {chef.name.split(" ")[0]}
+                Contact {chef.name.split(" ")[0]}
               </p>
-              <p className="text-2xl font-bold">
-                {formatPrice(chef.price_per_guest)}
-                <span className="text-sm font-normal text-cream-200/70">
-                  {" "}
-                  per guest
-                </span>
-              </p>
-              <p className="text-xs text-cream-200/60 mt-1">
-                {chef.min_guests}–{chef.max_guests} guests •{" "}
-                {chef.service_formats
-                  ?.map(serviceFormatLabel)
-                  .join(" & ") || "In-home dining"}
-              </p>
+              {chef.phone ? (
+                <>
+                  <a
+                    href={telUrl || undefined}
+                    className="text-2xl sm:text-3xl font-bold tracking-tight hover:text-champagne-300 transition-colors"
+                  >
+                    {formatPhone(chef.phone)}
+                  </a>
+                  <p className="text-xs text-cream-200/60 mt-1">
+                    Call or WhatsApp — replies usually within the hour.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-bold">Contact via our concierge</p>
+                  <p className="text-xs text-cream-200/60 mt-1">
+                    This chef has not published a direct number yet. Message us
+                    and we will connect you.
+                  </p>
+                </>
+              )}
             </div>
-            <Link
-              href={`/book/${chef.slug}`}
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 font-bold text-sm transition-all active:scale-95 shadow-lg"
-            >
-              Book this chef
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              {chef.phone && telUrl && (
+                <a
+                  href={telUrl}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white text-forest-950 font-bold text-sm transition-all active:scale-95"
+                >
+                  <Phone className="h-4 w-4" />
+                  Call now
+                </a>
+              )}
+              {whatsappUrl ? (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 font-bold text-sm transition-all active:scale-95 shadow-lg"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </a>
+              ) : (
+                <a
+                  href={`https://wa.me/254786530713?text=${encodeURIComponent(
+                    `Hi Book A Chef, I'd like to contact ${chef.name}.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 font-bold text-sm transition-all active:scale-95 shadow-lg"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Message concierge
+                </a>
+              )}
+            </div>
           </div>
-        </div>
+
+          {/* Other channels */}
+          {(chef.email || chef.instagram_handle) && (
+            <div className="flex flex-wrap gap-4 mt-5 pt-5 border-t border-white/10 text-sm">
+              {chef.email && (
+                <a
+                  href={`mailto:${chef.email}`}
+                  className="inline-flex items-center gap-2 text-cream-200/80 hover:text-white transition-colors"
+                >
+                  <Mail className="h-4 w-4" />
+                  {chef.email}
+                </a>
+              )}
+              {chef.instagram_handle && (
+                <a
+                  href={`https://instagram.com/${chef.instagram_handle.replace(
+                    /^@/,
+                    ""
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-cream-200/80 hover:text-white transition-colors"
+                >
+                  <Instagram className="h-4 w-4" />
+                  @{chef.instagram_handle.replace(/^@/, "")}
+                </a>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* ── ABOUT ── */}
         <section className="bg-white rounded-2xl border border-forest-100 p-6 sm:p-8 mb-6">
@@ -288,81 +341,65 @@ export default function ChefProfileClient({
         {/* ── DETAILS ── */}
         <section className="bg-white rounded-2xl border border-forest-100 p-6 sm:p-8 mb-6">
           <h2 className="text-lg font-bold text-forest-950 mb-4">Details</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-2">
                 Cuisines
               </p>
-              <div className="flex flex-wrap gap-1">
-                {chef.cuisines?.map((c) => (
-                  <span
-                    key={c}
-                    className="px-2 py-0.5 rounded-full bg-cream-100 text-forest-700 text-xs font-medium"
-                  >
-                    {c}
-                  </span>
-                ))}
+              <div className="flex flex-wrap gap-1.5">
+                {chef.cuisines?.length ? (
+                  chef.cuisines.map((c) => (
+                    <span
+                      key={c}
+                      className="px-2.5 py-1 rounded-full bg-cream-100 text-forest-700 text-xs font-medium"
+                    >
+                      {c}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-forest-500">Not listed</span>
+                )}
               </div>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-2">
                 Dietary
               </p>
-              <div className="flex flex-wrap gap-1">
-                {chef.dietary_specialties?.map((d) => (
-                  <span
-                    key={d}
-                    className="px-2 py-0.5 rounded-full bg-forest-50 text-forest-800 text-xs font-medium"
-                  >
-                    {d}
-                  </span>
-                ))}
+              <div className="flex flex-wrap gap-1.5">
+                {chef.dietary_specialties?.length ? (
+                  chef.dietary_specialties.map((d) => (
+                    <span
+                      key={d}
+                      className="px-2.5 py-1 rounded-full bg-forest-50 text-forest-800 text-xs font-medium"
+                    >
+                      {d}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-forest-500">Not listed</span>
+                )}
               </div>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-2">
                 Service areas
               </p>
               <p className="text-sm text-forest-700">
-                {chef.service_areas?.slice(0, 4).join(", ")}
-                {(chef.service_areas?.length || 0) > 4 && "…"}
+                {chef.service_areas?.length
+                  ? `${chef.service_areas.slice(0, 5).join(", ")}${
+                      chef.service_areas.length > 5 ? "…" : ""
+                    }`
+                  : chef.city}
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-1">
-                Service formats
+              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-2">
+                Experience
               </p>
-              <div className="flex flex-col gap-1">
-                {chef.allow_in_home && (
-                  <span className="flex items-center gap-1.5 text-sm text-forest-700">
-                    <Home className="h-3.5 w-3.5 text-forest-500" />
-                    In-home dining
-                  </span>
-                )}
-                {chef.allow_delivery && (
-                  <span className="flex items-center gap-1.5 text-sm text-forest-700">
-                    <Truck className="h-3.5 w-3.5 text-forest-500" />
-                    Cooked &amp; delivered
-                  </span>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-1">
-                Notice required
-              </p>
-              <p className="flex items-center gap-1.5 text-sm text-forest-700">
-                <Clock className="h-3.5 w-3.5 text-forest-500" />
-                {chef.min_notice_hours || 48} hours
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-forest-400 mb-1">
-                Guest range
-              </p>
-              <p className="flex items-center gap-1.5 text-sm text-forest-700">
-                <Calendar className="h-3.5 w-3.5 text-forest-500" />
-                {chef.min_guests}–{chef.max_guests} guests
+              <p className="text-sm text-forest-700">
+                {chef.experience_years > 0
+                  ? `${chef.experience_years}+ years`
+                  : "Not listed"}
               </p>
             </div>
           </div>
@@ -396,7 +433,9 @@ export default function ChefProfileClient({
         {/* ── MENUS ── */}
         {chef.menus?.length > 0 && (
           <section className="mb-6">
-            <h2 className="text-lg font-bold text-forest-950 mb-4">Menus</h2>
+            <h2 className="text-lg font-bold text-forest-950 mb-4">
+              What they cook
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {chef.menus.map((menu) => (
                 <MenuCard key={menu.id} menu={menu} />
@@ -405,67 +444,44 @@ export default function ChefProfileClient({
           </section>
         )}
 
-        {/* ── AVAILABILITY ── */}
-        <section className="bg-white rounded-2xl border border-forest-100 p-6 sm:p-8 mb-6">
-          <h2 className="text-lg font-bold text-forest-950 mb-4">
-            Availability
-          </h2>
-          <AvailabilityCalendar
-            availability={availability}
-            blockedDates={blockedDates}
-            busyDates={busyDates}
-          />
-        </section>
-
         {/* ── REVIEWS ── */}
-        <section className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-forest-950">
+        {reviews.length > 0 && (
+          <section className="mb-6">
+            <h2 className="text-lg font-bold text-forest-950 mb-4">
               Reviews{" "}
-              {chef.reviews_count > 0 && (
-                <span className="text-sm font-normal text-forest-400">
-                  ({chef.reviews_count})
-                </span>
-              )}
+              <span className="text-sm font-normal text-forest-400">
+                ({reviews.length})
+              </span>
             </h2>
-          </div>
-          {reviews.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {reviews.map((review) => (
                 <ReviewCard key={review.id} review={review} />
               ))}
             </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-forest-100 p-8 text-center">
-              <p className="text-sm text-forest-500">
-                No reviews yet. Be the first to book {chef.name.split(" ")[0]}{" "}
-                and leave a review.
-              </p>
-            </div>
-          )}
-        </section>
+          </section>
+        )}
 
-        {/* ── TRUST ── */}
+        {/* ── VERIFICATION ── */}
         <section className="bg-forest-50 rounded-2xl border border-forest-100 p-6 sm:p-8 mb-6">
           <h2 className="text-sm font-bold text-forest-950 mb-4">
-            Book with confidence
+            How verification works
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               {
                 icon: ShieldCheck,
-                title: "Verified chef",
-                desc: "ID-checked, background-cleared, and kitchen-tasted by our team.",
+                title: "ID verified",
+                desc: "Every chef submits a national ID or passport before their profile goes live.",
               },
               {
-                icon: Calendar,
-                title: "Escrow payment",
-                desc: "Your payment is held securely until the chef accepts your booking.",
+                icon: ChefHat,
+                title: "Vetted by our team",
+                desc: "We review each application, confirm credentials, and may arrange a kitchen tasting.",
               },
               {
-                icon: MessageCircle,
-                title: "Direct contact",
-                desc: "Connect with your chef on WhatsApp to confirm the details.",
+                icon: BadgeCheck,
+                title: "Verified badge",
+                desc: "The badge on this profile means Book A Chef has confirmed this chef's identity.",
               },
             ].map((item) => (
               <div key={item.title} className="flex gap-3">
@@ -486,15 +502,32 @@ export default function ChefProfileClient({
         </section>
 
         {/* ── STICKY CTA (mobile) ── */}
-        <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-white border-t border-forest-100 p-4 z-40">
-          <Link
-            href={`/book/${chef.slug}`}
-            className="w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-xl bg-forest-950 text-white font-bold text-sm"
-          >
-            Book {chef.name.split(" ")[0]}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
+        {chef.phone && (
+          <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-white border-t border-forest-100 p-4 z-40">
+            <div className="flex gap-2">
+              {telUrl && (
+                <a
+                  href={telUrl}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-3.5 rounded-xl border border-forest-200 text-forest-950 font-bold text-sm"
+                >
+                  <Phone className="h-4 w-4" />
+                  Call
+                </a>
+              )}
+              {whatsappUrl && (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-3.5 rounded-xl bg-forest-950 text-white font-bold text-sm"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  WhatsApp
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       <Footer />

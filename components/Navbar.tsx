@@ -122,24 +122,15 @@ export default function Navbar() {
             <Link href="/chefs" className="px-3 py-2 hover:opacity-100 transition-opacity">
               Browse chefs
             </Link>
-            <Link href="/request" className="px-3 py-2 hover:opacity-100 transition-opacity">
-              Request a chef
-            </Link>
-            {/* Tracking lives behind an account — only show once signed in. */}
-            {userEmail && (
-              <Link href="/request/status" className="px-3 py-2 hover:opacity-100 transition-opacity">
-                Track booking
-              </Link>
-            )}
             <Link href="/chef-jobs" className="px-3 py-2 hover:opacity-100 transition-opacity">
-              Cook with us
+              For chefs
             </Link>
           </nav>
 
           {/* Right */}
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              href="/request"
+              href="/apply"
               className={`hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 solid
                   ? "bg-forest-950 text-white hover:bg-forest-800"
@@ -147,7 +138,7 @@ export default function Navbar() {
               }`}
             >
               <ChefHat className="h-4 w-4" />
-              Request a Chef
+              Join as a chef
             </Link>
 
             {/* Profile */}
@@ -188,7 +179,7 @@ export default function Navbar() {
                       className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-forest-800 hover:bg-cream-50 transition-colors"
                     >
                       <LayoutDashboard className="h-4 w-4" />
-                      {userRole === "admin" ? "Admin" : userRole === "chef" ? "Chef dashboard" : "My bookings"}
+                      {userRole === "admin" ? "Admin" : userRole === "chef" ? "Chef dashboard" : "My favourites"}
                     </Link>
                     <button
                       onClick={handleSignOut}
@@ -237,27 +228,11 @@ export default function Navbar() {
                 Browse chefs
               </Link>
               <Link
-                href="/request"
-                onClick={() => setMobileMenuOpen(false)}
-                className="py-3 text-sm font-medium text-forest-950 border-b border-forest-100"
-              >
-                Request a chef
-              </Link>
-              {userEmail && (
-                <Link
-                  href="/request/status"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="py-3 text-sm font-medium text-forest-950 border-b border-forest-100"
-                >
-                  Track booking
-                </Link>
-              )}
-              <Link
                 href="/chef-jobs"
                 onClick={() => setMobileMenuOpen(false)}
                 className="py-3 text-sm font-medium text-forest-950 border-b border-forest-100"
               >
-                Cook with us
+                For chefs
               </Link>
 
               <div className="pt-3 mt-1">
@@ -268,7 +243,7 @@ export default function Navbar() {
                       onClick={() => setMobileMenuOpen(false)}
                       className="block py-3 text-sm font-medium text-forest-950"
                     >
-                      {userRole === "admin" ? "Admin" : userRole === "chef" ? "Chef dashboard" : "My bookings"}
+                      {userRole === "admin" ? "Admin" : userRole === "chef" ? "Chef dashboard" : "My favourites"}
                     </Link>
                     <button
                       onClick={() => {

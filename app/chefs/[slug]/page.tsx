@@ -32,14 +32,14 @@ export async function generateMetadata({
     title: `${chef.name} | Book A Chef Kenya`,
     description:
       chef.tagline ||
-      `Book ${chef.name}, a verified private chef in ${chef.city}. ${
+      `${chef.name}, a verified private chef in ${chef.city}. ${
         chef.cuisines?.slice(0, 3).join(", ") || "Private dining"
       }.`,
     openGraph: {
       title: `${chef.name} | Book A Chef Kenya`,
       description:
         chef.tagline ||
-        `Verified private chef in ${chef.city}. Book directly on Book A Chef.`,
+        `Verified private chef in ${chef.city}. Contact directly on Book A Chef.`,
       images: chef.avatar_url ? [chef.avatar_url] : undefined,
       type: "profile",
     },
@@ -71,37 +71,6 @@ export default async function ChefProfilePage({
     .order("created_at", { ascending: false })
     .limit(20);
 
-  const { data: availability } = await supabase
-    .from("chef_availability")
-    .select("*")
-    .eq("chef_id", chef.id)
-    .maybeSingle();
-
-  const { data: blockedDates } = await supabase
-    .from("chef_blocked_dates")
-    .select("blocked_date, reason")
-    .eq("chef_id", chef.id)
-    .order("blocked_date", { ascending: true });
-
-  // Dates the chef already has active bookings.
-  const { data: busyDates } = await supabase
-    .from("bookings")
-    .select("booking_date")
-    .eq("chef_id", chef.id)
-    .in("status", [
-      "assigned",
-      "chef_accepted",
-      "payment_pending",
-      "confirmed",
-      "en_route",
-      "cooking",
-      "in_progress",
-    ]);
-
-  const busySet = Array.from(
-    new Set(((busyDates as any[]) || []).map((b) => b.booking_date))
-  );
-
   return (
     <ChefProfileClient
       chef={{
@@ -111,9 +80,6 @@ export default async function ChefProfilePage({
         ),
       }}
       reviews={reviews || []}
-      availability={availability || null}
-      blockedDates={blockedDates || []}
-      busyDates={busySet}
     />
   );
 }

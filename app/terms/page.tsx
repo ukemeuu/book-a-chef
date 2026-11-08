@@ -3,7 +3,8 @@ import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "Terms of Service | Book A Chef Kenya",
-  description: "Terms and conditions governing diner bookings, private chef services, and payments on Book A Chef Kenya.",
+  description:
+    "Terms and conditions governing the Book A Chef Kenya chef directory and the use of chef profiles.",
 };
 
 export default function TermsPage() {
@@ -19,49 +20,77 @@ export default function TermsPage() {
           <h1 className="text-3xl sm:text-4xl font-bold text-forest-950">
             Terms of Service
           </h1>
-          <p className="text-sm text-forest-500">Last updated: August 2026</p>
+          <p className="text-sm text-forest-500">Last updated: November 2026</p>
         </div>
 
         <div className="space-y-6 text-xs sm:text-sm text-forest-800 leading-relaxed">
           <section className="space-y-2">
-            <h2 className="text-lg font-bold text-forest-950">1. Introduction & Concierge Service Scope</h2>
+            <h2 className="text-lg font-bold text-forest-950">1. Introduction & Directory Scope</h2>
             <p>
-              Book A Chef Kenya (&ldquo;we&rdquo;, &ldquo;us&rdquo;, &ldquo;our&rdquo;) operates a managed private culinary concierge service providing bespoke in-home and villa dining experiences across Kenya. Clients request dining experiences through our platform concierge, and we curate certified executive culinary talent, coordinate bespoke menu execution, and oversee culinary service delivery. By accessing or using bookachef.co.ke, you agree to comply with and be bound by these Terms of Service.
+              Book A Chef Kenya (&ldquo;we&rdquo;, &ldquo;us&rdquo;, &ldquo;our&rdquo;)
+              operates a directory of verified private chefs across Kenya.
+              Customers browse chef profiles, view the food they cook, and
+              contact them directly by phone or WhatsApp. Book A Chef is a
+              directory and introduction platform — we do not take bookings,
+              process payments, or act as a party to any agreement between a
+              customer and a chef. By accessing or using bookachef.co.ke, you
+              agree to comply with and be bound by these Terms of Service.
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-bold text-forest-950">2. Inquiries, Proposals & Payment Structure</h2>
+            <h2 className="text-lg font-bold text-forest-950">2. Chef Profiles & Verification</h2>
             <p>
-              Dining requests are received by our concierge team who confirm culinary availability and assemble a bespoke menu proposal. Upon client agreement, the culinary fee (covering menu preparation, live cooking, plating, and spotless kitchen cleanup) is billed and collected by Book A Chef as the service provider. The culinary labor fee is separate from ingredient costs. Ingredients are either sourced fresh on the event day by the chef on the client&apos;s behalf (with 0% markup), or provided directly by the client.
+              Chefs apply to join the directory and provide their name, contact
+              details, cuisines, menus, and a national ID or passport number.
+              Our team reviews each application and verifies the chef&apos;s
+              identity before their profile is published. A &ldquo;Verified&rdquo;
+              badge indicates that we have confirmed the chef&apos;s identity; it
+              is not a guarantee of the quality of their services. Chefs are
+              responsible for keeping their profile information accurate and up
+              to date.
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-bold text-forest-950">3. Chef Engagement & Quality Standards</h2>
+            <h2 className="text-lg font-bold text-forest-950">3. Direct Engagement</h2>
             <p>
-              Chefs affiliated with Book A Chef are contracted culinary partners who have undergone rigorous background identity vetting, professional hygiene evaluations, and private test kitchen tasting assessments. Chefs adhere strictly to Book A Chef&apos;s operational standard operating procedures (SOPs) and professional sanitation standards.
+              Any dining service, booking, price, and arrangement is agreed
+              directly between the customer and the chef. Book A Chef does not
+              employ chefs, does not set their prices, and is not responsible
+              for the conduct, food safety, or performance of any chef. We
+              encourage customers to agree on the scope, price, and
+              responsibilities in writing before any service takes place.
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-bold text-forest-950">4. Client Kitchen & Facility Access</h2>
+            <h2 className="text-lg font-bold text-forest-950">4. Intellectual Property</h2>
             <p>
-              For in-home private dining services, the Client agrees to provide a clean, functional kitchen environment with working cooking appliances (stove, oven, refrigeration, and running water). The Client must disclose all dietary allergies and restrictions during the inquiry process.
+              Chefs retain ownership of the photos, menus, and text they submit
+              to the directory. By submitting content, a chef grants Book A Chef
+              a non-exclusive licence to display that content on the platform
+              and in related marketing.
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-bold text-forest-950">5. Cancellation & Rescheduling</h2>
+            <h2 className="text-lg font-bold text-forest-950">5. Limitation of Liability</h2>
             <p>
-              Cancellations and date reschedules are managed through our concierge. Notice provided at least 72 hours prior to scheduled dining qualifies for a deposit refund or flexible date transfer. Cancellations within 24 hours of service may incur a cancellation fee due to pre-allocated culinary scheduling.
+              Book A Chef provides the directory &ldquo;as is&rdquo; and makes no
+              representations or warranties about the accuracy, completeness, or
+              reliability of any profile. To the fullest extent permitted by
+              law, we exclude all liability for any loss or damage arising from
+              your use of the directory or your dealings with any chef.
             </p>
           </section>
 
           <section className="space-y-2">
             <h2 className="text-lg font-bold text-forest-950">6. Governing Law</h2>
             <p>
-              These Terms shall be governed by and construed in accordance with the laws of the Republic of Kenya. Any disputes shall be subject to the exclusive jurisdiction of the courts of Kenya.
+              These Terms shall be governed by and construed in accordance with
+              the laws of the Republic of Kenya. Any disputes shall be subject to
+              the exclusive jurisdiction of the courts of Kenya.
             </p>
           </section>
         </div>
