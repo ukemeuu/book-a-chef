@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { createAdminClient } from "@/utils/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +11,12 @@ const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/av
  *
  * Uploads a chef's photo to the public `chef-photos` bucket on their behalf.
  *
- * The bucket's RLS policy only allows admins to write, so a direct client-side
- * upload from the chef dashboard would be rejected. This route authenticates
- * the chef, then writes with the service role — the chef still controls which
- * file is sent, and the path is scoped to their user id.
+ * Two reasons this goes through the server:
+ *   1. The bucket's RLS policy only allows admins to write, so a direct
+ *      client-side upload from the chef dashboard would be rejected.
+ *   2. The Supabase JS client cannot parse the new `sb_secret_...` API keys
+ *      used on this project, so we call the Storage REST API directly with the
+ *      service key instead of `supabase.storage`.
  *
  * FormData fields: `file` (the image) and `label` (avatar | cover | gallery).
  */
@@ -71,8 +72,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const admin = createAdminClient();
-    if (!admin) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceKey) {
       return NextResponse.json(
         { error: "Photo uploads are not configured on this site yet." },
         { status: 500 }
@@ -82,30 +84,41 @@ export async function POST(request: NextRequest) {
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
     const path = `chefs/${chefId}-${label}-${Date.now()}.${ext || "jpg"}`;
 
-    const { data, error } = await admin.storage.from("chef-photos").upload(path, file, {
-      upsert: true,
-      contentType: file.type,
-    });
+    const buffer = await file.arrayBuffer();
+    const uploadRes = await fetch(
+      `${supabaseUrl}/storage/v1/object/chef-photos/${path}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+          "Content-Type": file.type,
+          "x-upsert": "true",
+        },
+        body: buffer,
+      }
+    );
 
-    if (error) {
-      console.error("[chef/upload-photo] Storage error:", error.message);
+    if (!uploadRes.ok) {
+      const detail = await uploadRes.text().catch(() => "");
+      console.error(
+        `[chef/upload-photo] Storage error ${uploadRes.status}:`,
+        detail.slice(0, 300)
+      );
       return NextResponse.json(
         { error: "Could not upload that image. Please try again." },
         { status: 500 }
       );
     }
 
-    const { data: urlData } = admin.storage
-      .from("chef-photos")
-      .getPublicUrl(data.path);
-
     return NextResponse.json({
       success: true,
-      url: urlData.publicUrl,
-      path: data.path,
+      url: `${supabaseUrl}/storage/v1/object/public/chef-photos/${path}`,
+      path,
     });
   } catch (err: any) {
     console.error("[chef/upload-photo] Unexpected error:", err);
     return NextResponse.json({ error: "Internal server error." }, { status: 500 });
   }
 }
+
