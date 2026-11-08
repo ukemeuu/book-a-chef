@@ -1,7 +1,13 @@
 -- ==============================================================================
 -- BOOK A CHEF KENYA — IMMEDIATE ROW LEVEL SECURITY (RLS) LOCKDOWN SCRIPT
--- Run this in your Supabase SQL Editor: https://supabase.com/dashboard/project/_/sql
--- This seals all tables and completely prevents unauthorized public scraping.
+--
+-- ⚠️  DO NOT RE-RUN ON THE CURRENT (DIRECTORY) MODEL.
+-- Section 3 below sets every verified chef's phone and email to NULL. That was
+-- correct when Book A Chef was a managed booking service, but the site is now a
+-- public directory where the chef's phone number IS the product. Re-running
+-- this script would blank every phone number and hide the contact details
+-- customers use to reach chefs. The RLS policies in sections 1 and 2 are still
+-- valid; section 3 is retired.
 -- ==============================================================================
 
 -- 1. CRITICAL: LOCK DOWN CHEF_APPLICATIONS (SEAL THE PHONE/EMAIL LEAK)
@@ -73,12 +79,14 @@ ALTER TABLE IF EXISTS public.menus ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.chef_availability ENABLE ROW LEVEL SECURITY;
 
 
--- 3. ENSURE CHEF SENSITIVE COLUMNS ARE PROTECTED
--- Chefs table is public so diners can view catalogs, photos, and menus.
--- Ensure phone & email are NEVER exposed on the public chefs table:
-UPDATE public.chefs 
-SET phone = NULL, email = NULL 
-WHERE is_placeholder = true OR verified = true;
+-- 3. ⚠️ RETIRED ON THE DIRECTORY MODEL — DO NOT RUN.
+-- This used to hide phone/email because Book A Chef was a managed booking
+-- service. The site is now a public directory and the chef's phone number is
+-- the point of the listing. Running this UPDATE would blank every phone and
+-- email on the directory.
+-- UPDATE public.chefs 
+-- SET phone = NULL, email = NULL 
+-- WHERE is_placeholder = true OR verified = true;
 
 -- 3.5 ENSURE RESTAURANT PARTNER & PRIVACY COLUMNS EXIST (v30)
 ALTER TABLE public.chefs ADD COLUMN IF NOT EXISTS partner_type TEXT DEFAULT 'independent';
