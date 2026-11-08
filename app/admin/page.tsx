@@ -484,6 +484,79 @@ export default function AdminPortalPage() {
     }
   };
 
+  const handleRequestPhotos = async (chef: any) => {
+    setActionLoadingId(chef.id);
+    setAdminNotice(null);
+    try {
+      const res = await fetch("/api/admin/chef-notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chef_id: chef.id, kind: "photo_request" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAdminNotice({
+          tone: "error",
+          message: data.error || "Could not send the photo request.",
+          whatsappUrl: data.whatsapp_url,
+        });
+        return;
+      }
+      setAdminNotice({
+        tone: data.success ? "success" : "error",
+        message: data.message,
+        whatsappUrl: data.whatsapp_url,
+      });
+    } catch (err: any) {
+      setAdminNotice({ tone: "error", message: err.message });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRequestAllPhotos = async () => {
+    const targets = chefs.filter(
+      (c) => !c.avatar || c.avatar.includes("/icon.png")
+    );
+    if (targets.length === 0) {
+      setAdminNotice({
+        tone: "success",
+        message: "Every chef already has a profile photo.",
+      });
+      return;
+    }
+    setActionLoadingId("bulk-photos");
+    setAdminNotice(null);
+    let sent = 0;
+    let failed = 0;
+    let firstWhatsapp: string | null = null;
+    for (const chef of targets) {
+      try {
+        const res = await fetch("/api/admin/chef-notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chef_id: chef.id, kind: "photo_request" }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) sent += 1;
+        else {
+          failed += 1;
+          if (data.whatsapp_url && !firstWhatsapp) firstWhatsapp = data.whatsapp_url;
+        }
+      } catch {
+        failed += 1;
+      }
+    }
+    setAdminNotice({
+      tone: failed === 0 ? "success" : sent > 0 ? "success" : "error",
+      message:
+        `Photo requests: ${sent} emailed, ${failed} could not be emailed` +
+        (failed > 0 ? " (use the WhatsApp option or add their email first)." : "."),
+      whatsappUrl: firstWhatsapp,
+    });
+    setActionLoadingId(null);
+  };
+
   const openEditChef = (chef: any) => {
     setEditingChef({
       id: chef.id,
@@ -810,12 +883,26 @@ export default function AdminPortalPage() {
                   account.
                 </p>
               </div>
-              <button
-                onClick={() => setIsListingModalOpen(true)}
-                className="px-5 py-3 rounded-xl bg-forest-950 text-white font-bold text-sm hover:bg-forest-800 flex items-center gap-1.5 self-start sm:self-auto"
-              >
-                <Plus className="h-4 w-4" /> Add chef
-              </button>
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <button
+                  onClick={handleRequestAllPhotos}
+                  disabled={actionLoadingId === "bulk-photos"}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-forest-200 text-forest-800 text-sm font-medium hover:bg-cream-50 disabled:opacity-50 transition-colors"
+                >
+                  {actionLoadingId === "bulk-photos" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4" />
+                  )}
+                  Request all photos
+                </button>
+                <button
+                  onClick={() => setIsListingModalOpen(true)}
+                  className="px-5 py-3 rounded-xl bg-forest-950 text-white font-bold text-sm hover:bg-forest-800 flex items-center gap-1.5 self-start sm:self-auto"
+                >
+                  <Plus className="h-4 w-4" /> Add chef
+                </button>
+              </div>
             </div>
 
             {unlinkedChefs.length > 0 && (
@@ -883,6 +970,11 @@ export default function AdminPortalPage() {
                           <div className="h-full w-full flex items-center justify-center">
                             <ChefHat className="h-6 w-6 text-forest-400" />
                           </div>
+                        )}
+                        {(!chef.avatar || chef.avatar.includes("/icon.png")) && (
+                          <span className="absolute bottom-0 left-0 right-0 bg-amber-100/95 text-amber-800 text-[8px] font-bold uppercase tracking-wide text-center py-0.5">
+                            Placeholder
+                          </span>
                         )}
                       </div>
                       <div className="min-w-0">
@@ -966,6 +1058,18 @@ export default function AdminPortalPage() {
                           className="inline-flex items-center gap-1 text-forest-950 font-bold underline underline-offset-2"
                         >
                           Edit
+                        </button>
+                        <button
+                          onClick={() => handleRequestPhotos(chef)}
+                          disabled={actionLoadingId === chef.id}
+                          className="inline-flex items-center gap-1 text-forest-950 font-bold underline underline-offset-2 disabled:opacity-50"
+                        >
+                          {actionLoadingId === chef.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ImageIcon className="h-3 w-3" />
+                          )}
+                          Request photos
                         </button>
                         <button
                           onClick={() => handleLinkChef(chef)}

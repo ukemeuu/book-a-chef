@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   BadgeCheck,
   Phone,
+  MessageCircle,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -20,16 +21,13 @@ import ChefCard from "@/components/chef/ChefCard";
 import { MarketplaceChef } from "@/utils/marketplace";
 import { createClient } from "@/utils/supabase/client";
 
-const CUISINE_CATEGORIES = [
-  { id: "all", label: "All", icon: "✨" },
-  { id: "Swahili", label: "Swahili & Seafood", icon: "🦐" },
-  { id: "BBQ", label: "Nyama Choma & BBQ", icon: "🔥" },
-  { id: "Italian", label: "Italian & Pasta", icon: "🍝" },
-  { id: "Fine Dining", label: "Fine Dining", icon: "🍷" },
-  { id: "Continental", label: "Continental", icon: "🥩" },
-  { id: "Indian", label: "Indian & Fusion", icon: "🍛" },
-  { id: "Pastry", label: "Pastry & Desserts", icon: "🥐" },
-  { id: "Vegan", label: "Plant-Based", icon: "🥗" },
+const OCCASIONS = [
+  { name: "Birthday", icon: "🎂", desc: "A cake, a dinner, and a night to remember." },
+  { name: "Anniversary", icon: "🥂", desc: "Recreate your first date, done properly." },
+  { name: "Dinner Party", icon: "🍽️", desc: "Impress your guests without lifting a finger." },
+  { name: "Corporate Event", icon: "💼", desc: "Client dinners and team celebrations, handled." },
+  { name: "Date Night", icon: "🕯️", desc: "A private table for two in your own home." },
+  { name: "Family Gathering", icon: "👨‍👩‍👧‍👦", desc: "Bring everyone together around one table." },
 ];
 
 const DINING_EXPERIENCES = [
@@ -83,24 +81,24 @@ const DINING_EXPERIENCES = [
   },
 ];
 
-const VERIFICATION_STEPS = [
+const HOW_IT_WORKS = [
   {
     step: "01",
-    title: "Apply with your details",
-    desc: "Chefs apply with their name, cuisines, and a national ID or passport number.",
-    icon: <ChefHat className="h-5 w-5" />,
+    title: "Browse the directory",
+    desc: "Filter by cuisine, location, and price. See each chef's menus and reviews.",
+    icon: <Search className="h-5 w-5" />,
   },
   {
     step: "02",
-    title: "We verify and vet",
-    desc: "Our team reviews every application, confirms credentials, and may arrange a tasting.",
-    icon: <ShieldCheck className="h-5 w-5" />,
+    title: "Call or WhatsApp directly",
+    desc: "No booking forms, no middleman. Talk to the chef and agree the details yourselves.",
+    icon: <Phone className="h-5 w-5" />,
   },
   {
     step: "03",
-    title: "Profile goes live",
-    desc: "Approved chefs appear in the directory with a Verified badge and their direct number.",
-    icon: <BadgeCheck className="h-5 w-5" />,
+    title: "Enjoy your dinner",
+    desc: "Your chef arrives with fresh ingredients, cooks, serves, and cleans up.",
+    icon: <ChefHat className="h-5 w-5" />,
   },
 ];
 
@@ -111,19 +109,18 @@ const TRUST_FEATURES = [
     desc: "Every chef submits a national ID or passport before their profile goes live.",
   },
   {
+    icon: <BadgeCheck className="h-5 w-5 text-forest-600" />,
+    title: "Vetted by our team",
+    desc: "We review each application and confirm credentials before listing.",
+  },
+  {
     icon: <Phone className="h-5 w-5 text-forest-600" />,
     title: "Direct contact",
     desc: "Call or WhatsApp the chef directly — no platform messaging, no middleman.",
   },
-  {
-    icon: <Star className="h-5 w-5 text-forest-600" />,
-    title: "Vetted by our team",
-    desc: "We review each application and confirm credentials before listing.",
-  },
 ];
 
 export default function HomePage() {
-  const [activeCategory, setActiveCategory] = useState("all");
   const [featuredChefs, setFeaturedChefs] = useState<MarketplaceChef[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
@@ -201,13 +198,13 @@ export default function HomePage() {
 
         <div className="relative max-w-3xl mx-auto px-4 text-center">
           <h1 className="font-sans text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
-            Find a private chef,
+            A private chef for
             <br />
-            <span className="text-champagne-400">call them directly.</span>
+            <span className="text-champagne-400">every occasion.</span>
           </h1>
           <p className="mt-4 text-base sm:text-lg text-cream-200/80 max-w-xl mx-auto leading-relaxed">
-            Browse verified chefs across Kenya, see what they cook, and reach
-            them on WhatsApp or phone — no booking forms, no middleman.
+            Browse verified chefs, see what they cook, and call them directly.
+            No booking forms, no middleman — just you and the chef.
           </p>
 
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -218,16 +215,15 @@ export default function HomePage() {
               <Search className="h-4 w-4" />
               Browse chefs
             </Link>
-            <Link
-              href="/apply"
+            <a
+              href="#how-it-works"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl border border-white/25 text-white font-bold text-sm hover:bg-white/10 transition-all"
             >
-              <ChefHat className="h-4 w-4" />
-              Join as a chef
-            </Link>
+              How it works
+              <ArrowRight className="h-4 w-4" />
+            </a>
           </div>
 
-          {/* Quick stats */}
           <div className="mt-8 flex items-center justify-center gap-6 text-cream-200/60 text-xs font-medium">
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5 text-champagne-400" />
@@ -245,42 +241,43 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── CATEGORY PILLS ── */}
-      <section className="sticky top-16 z-30 bg-white/95 backdrop-blur-md border-b border-forest-100/80">
+      {/* ── OCCASIONS ── */}
+      <section className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div
-            className="flex items-center gap-2 py-3 overflow-x-auto no-scrollbar md:flex-wrap md:justify-center md:overflow-visible"
-            role="tablist"
-            aria-label="Cuisine categories"
-          >
-            {CUISINE_CATEGORIES.map((cat) => {
-              const isActive = activeCategory === cat.id;
-              const href =
-                cat.id === "all" ? "/chefs" : `/chefs?cuisine=${encodeURIComponent(cat.id)}`;
-              return (
-                <Link
-                  key={cat.id}
-                  href={href}
-                  role="tab"
-                  aria-selected={isActive}
-                  className={`inline-flex shrink-0 items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 focus-visible:outline-none ${
-                    isActive
-                      ? "bg-forest-950 text-white shadow-sm"
-                      : "bg-cream-100 text-forest-700 hover:bg-cream-200"
-                  }`}
-                >
-                  <span aria-hidden="true" className="leading-none">{cat.icon}</span>
-                  <span className="leading-none">{cat.label}</span>
-                </Link>
-              );
-            })}
+          <div className="max-w-2xl mb-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+              Occasions
+            </p>
+            <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+              What are you celebrating?
+            </h2>
+            <p className="mt-3 text-forest-500">
+              A private chef turns any occasion into a restaurant-worthy night —
+              in your own home.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {OCCASIONS.map((o) => (
+              <Link
+                key={o.name}
+                href="/chefs"
+                className="group flex flex-col items-center text-center p-5 rounded-2xl bg-white border border-forest-100/60 hover:shadow-lg hover:-translate-y-1 hover:border-forest-200 transition-all duration-300"
+              >
+                <span className="text-3xl mb-3" aria-hidden="true">{o.icon}</span>
+                <h3 className="font-bold text-sm text-forest-950 group-hover:text-champagne-600 transition-colors">
+                  {o.name}
+                </h3>
+                <p className="text-xs text-forest-500 mt-1 leading-snug">{o.desc}</p>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
 
       {/* ── FEATURED CHEFS ── */}
       {featuredChefs.length > 0 && (
-        <section className="py-16 sm:py-20">
+        <section className="py-16 sm:py-20 bg-cream-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-end justify-between mb-8">
               <div>
@@ -324,24 +321,20 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── HOW VERIFICATION WORKS ── */}
-      <section className="py-16 sm:py-20 bg-cream-50">
+      {/* ── HOW IT WORKS ── */}
+      <section id="how-it-works" className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-              Verification
+              How it works
             </p>
             <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-              Every chef is vetted
+              Three steps to dinner
             </h2>
-            <p className="mt-3 text-forest-500">
-              A profile is never public until our team has confirmed who the
-              chef is. Here is the process.
-            </p>
           </div>
 
           <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-            {VERIFICATION_STEPS.map((item) => (
+            {HOW_IT_WORKS.map((item) => (
               <div
                 key={item.step}
                 className="group flex flex-col h-full bg-white rounded-2xl p-6 border border-forest-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
@@ -367,21 +360,21 @@ export default function HomePage() {
       </section>
 
       {/* ── TRUST FEATURES ── */}
-      <section className="py-16 sm:py-20">
+      <section className="py-16 sm:py-20 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
               Why Book A Chef
             </p>
             <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-              A directory you can trust
+              Book with confidence
             </h2>
           </div>
 
           <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-8">
             {TRUST_FEATURES.map((feature) => (
               <div key={feature.title} className="flex gap-4">
-                <div className="w-10 h-10 rounded-xl bg-cream-50 flex items-center justify-center shrink-0 shadow-sm border border-forest-100">
+                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-forest-100">
                   {feature.icon}
                 </div>
                 <div>
@@ -394,8 +387,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── SERVICE TYPES ── */}
-      <section className="py-16 sm:py-20 bg-cream-50">
+      {/* ── CUISINES ── */}
+      <section className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-8">
             <div>
@@ -438,7 +431,7 @@ export default function HomePage() {
       </section>
 
       {/* ── DESTINATIONS ── */}
-      <section className="pt-16 pb-24 sm:pt-20 sm:pb-28">
+      <section className="py-16 sm:py-20 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mb-8">
             <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
@@ -501,14 +494,17 @@ export default function HomePage() {
                   className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-champagne-500 hover:bg-champagne-600 text-white font-bold text-sm uppercase tracking-wider shadow-xl transition-all hover:scale-105 active:scale-95"
                 >
                   <ChefHat className="h-5 w-5" />
-                  Browse chefs
+                  Find your chef
                 </Link>
-                <Link
-                  href="/apply"
+                <a
+                  href="https://wa.me/254786530713?text=Hi%20Book%20A%20Chef%2C%20I%27d%20like%20help%20choosing%20a%20private%20chef."
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/25 text-white font-bold text-sm uppercase tracking-wider hover:bg-white/10 transition-all"
                 >
-                  Join as a chef
-                </Link>
+                  <MessageCircle className="h-5 w-5" />
+                  Talk to concierge
+                </a>
               </div>
             </div>
           </div>

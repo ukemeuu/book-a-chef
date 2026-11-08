@@ -79,3 +79,32 @@ ALTER TABLE public.chef_favorites ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can manage own favorites" ON public.chef_favorites;
 CREATE POLICY "Users can manage own favorites" ON public.chef_favorites
     FOR ALL USING (auth.uid() = client_id);
+
+-- ── 5. LET CHEFS UPLOAD THEIR OWN PHOTOS ─────────────────────────────────────
+-- The original storage policy only allowed admins. Chefs need to upload their
+-- own portrait, cover, and dish photos from the chef dashboard, so allow any
+-- authenticated chef to add objects to the public chef-photos bucket.
+
+DROP POLICY IF EXISTS "Chefs can upload own photos" ON storage.objects;
+CREATE POLICY "Chefs can upload own photos"
+    ON storage.objects FOR INSERT
+    WITH CHECK (
+        bucket_id = 'chef-photos'
+        AND auth.uid() IS NOT NULL
+        AND EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'chef'
+        )
+    );
+
+DROP POLICY IF EXISTS "Chefs can update own photos" ON storage.objects;
+CREATE POLICY "Chefs can update own photos"
+    ON storage.objects FOR UPDATE
+    USING (
+        bucket_id = 'chef-photos'
+        AND auth.uid() IS NOT NULL
+        AND EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'chef'
+        )
+    );

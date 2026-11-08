@@ -156,3 +156,49 @@ export function bookingConfirmedEmail(params: {
 </body>
 </html>`;
 }
+
+/**
+ * Asked a chef to replace the Book A Chef placeholder images on their public
+ * profile with a real portrait, a cover photo, and dish photos.
+ */
+export function photoRequestEmail(params: {
+  chefName: string;
+  dashboardUrl: string;
+}) {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Add your photos</title></head>
+<body style="font-family: Georgia, serif; background: #f7f5f0; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; border: 1px solid #e8e4dc;">
+    <div style="background: #1a2e1a; padding: 32px; text-align: center;">
+      <h1 style="color: #f7f5f0; font-family: Georgia, serif; margin: 0; font-size: 22px;">Book A Chef</h1>
+      <p style="color: #c9a14c; margin: 8px 0 0; font-size: 13px; letter-spacing: 2px; text-transform: uppercase;">Kenya's Private Chef Directory</p>
+    </div>
+    <div style="padding: 32px;">
+      <h2 style="color: #1a2e1a; font-size: 20px; margin-top: 0;">Your profile needs your photos</h2>
+      <p style="color: #4a5a4a; line-height: 1.6;">Hi ${params.chefName},</p>
+      <p style="color: #4a5a4a; line-height: 1.6;">Your chef profile is live on Book A Chef, but it&apos;s currently showing our placeholder logo instead of your photos. Customers are far more likely to get in touch when they can see the chef and the food.</p>
+
+      <div style="background: #f7f5f0; border-radius: 12px; padding: 20px; margin: 24px 0; border: 1px solid #e8e4dc; font-size: 14px;">
+        <p style="margin: 0 0 10px; color: #1a2e1a; font-weight: bold;">Please add:</p>
+        <p style="margin: 4px 0; color: #4a5a4a;">&bull; A clear portrait of you in chef whites</p>
+        <p style="margin: 4px 0; color: #4a5a4a;">&bull; A cover photo of your kitchen or a signature dish</p>
+        <p style="margin: 4px 0; color: #4a5a4a;">&bull; Two or more photos of your dishes</p>
+      </div>
+
+      <p style="color: #4a5a4a; line-height: 1.6;">Sign in to your chef dashboard and open <strong>Profile &rarr; Photos</strong> to upload them. It takes less than two minutes.</p>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${params.dashboardUrl}" style="background: #1a2e1a; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 13px; letter-spacing: 1px;">Open my chef dashboard</a>
+      </div>
+
+      <p style="color: #4a5a4a; font-size: 13px;">If you have trouble signing in, just reply to this email and we&apos;ll help.</p>
+    </div>
+    <div style="background: #f7f5f0; padding: 20px; text-align: center; font-size: 12px; color: #8a9a8a;">
+      <p>Book A Chef Kenya &mdash; <a href="https://bookachef.co.ke" style="color: #1a2e1a;">bookachef.co.ke</a></p>
+    </div>
+  </div>
+</body>
+</html>`;
+}

@@ -16,6 +16,8 @@ import {
   AlertCircle,
   ExternalLink,
   Lock,
+  X,
+  Image as ImageIcon,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -134,6 +136,12 @@ export default function ChefDashboardPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Photos — uploaded to Supabase Storage, then saved on the profile.
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
+
   const loadApplication = useCallback(async () => {
     const response = await fetch("/api/chef/application", { cache: "no-store" });
     const payload = await response.json().catch(() => ({}));
@@ -195,6 +203,9 @@ export default function ChefDashboardPage() {
         setChef(chefRecord);
         setNationalIdNumber(chefRecord.national_id_number || "");
         setPhone(chefRecord.phone || "");
+        setAvatarUrl(chefRecord.avatar_url || "");
+        setCoverUrl(chefRecord.cover_image_url || "");
+        setGalleryUrls(chefRecord.gallery_images || []);
         setAllowInHome(chefRecord.allow_in_home ?? true);
         setAllowDelivery(chefRecord.allow_delivery ?? true);
         setBio(chefRecord.bio || "");
@@ -287,6 +298,9 @@ export default function ChefDashboardPage() {
           price_per_guest: startingPrice,
           min_guests: minGuests,
           max_guests: maxGuests,
+          avatar_url: avatarUrl || null,
+          cover_image_url: coverUrl || null,
+          gallery_images: galleryUrls,
         }),
       });
       const data = await res.json();
@@ -298,6 +312,40 @@ export default function ChefDashboardPage() {
       setActionLoading(false);
     }
   };
+
+  /**
+   * Upload a photo through the server, which writes to the chef-photos bucket
+   * with the service role (the bucket's RLS policy only allows admins to write
+   * directly). The chef still chooses the file; the path is scoped to them.
+   */
+  const uploadPhoto = async (
+    file: File,
+    label: string,
+    apply: (url: string) => void
+  ) => {
+    setUploadingPhoto(label);
+    setSaveError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("label", label);
+      const res = await fetch("/api/chef/upload-photo", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Upload failed.");
+      apply(data.url);
+      setSaveSuccess("Photo uploaded. Remember to save your changes.");
+    } catch (err: any) {
+      setSaveError(
+        "Photo upload failed: " + (err?.message || "please try again.") +
+        " — you can also paste an image URL instead."
+      );
+    } finally {
+      setUploadingPhoto(null);
+    }
+  };
+
+  const removeGalleryImage = (url: string) =>
+    setGalleryUrls((prev) => prev.filter((u) => u !== url));
 
   if (portalState === "loading") {
     return (
@@ -667,6 +715,147 @@ export default function ChefDashboardPage() {
                   </span>
                   <span className="text-xs text-forest-500">Hot delivery</span>
                 </button>
+              </div>
+            </section>
+
+            <section className="bg-white rounded-2xl border border-forest-100 p-6">
+              <h2 className="text-lg font-bold text-forest-950 mb-1">Photos</h2>
+              <p className="text-sm text-forest-500 mb-5">
+                Customers book chefs they can see. Add a clear portrait, a cover
+                photo, and a few dish photos.
+              </p>
+
+              {/* Avatar */}
+              <div className="mb-5">
+                <span className="block text-sm font-medium text-forest-950 mb-2">
+                  Profile photo
+                </span>
+                <div className="flex items-center gap-3">
+                  <div className="relative h-16 w-16 rounded-xl overflow-hidden border border-forest-200 bg-forest-950 shrink-0">
+                    {avatarUrl ? (
+                      <Image src={avatarUrl} alt="Profile" fill className="object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-xs text-cream-100 text-center px-1">
+                        Logo
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-forest-200 bg-cream-50 hover:bg-cream-100 text-xs font-bold text-forest-700 transition-all">
+                      {uploadingPhoto === "avatar" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ImageIcon className="h-4 w-4" />
+                      )}
+                      {uploadingPhoto === "avatar" ? "Uploading…" : "Upload photo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadPhoto(f, "avatar", setAvatarUrl);
+                        }}
+                      />
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="Or paste an image URL"
+                      value={avatarUrl}
+                      onChange={(e) => setAvatarUrl(e.target.value)}
+                      className={inputClass + " mt-2"}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cover */}
+              <div className="mb-5">
+                <span className="block text-sm font-medium text-forest-950 mb-2">
+                  Cover photo
+                </span>
+                <div className="flex items-center gap-3">
+                  <div className="relative h-16 w-24 rounded-xl overflow-hidden border border-forest-200 bg-forest-950 shrink-0">
+                    {coverUrl ? (
+                      <Image src={coverUrl} alt="Cover" fill className="object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-xs text-cream-100 text-center px-1">
+                        Logo
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-forest-200 bg-cream-50 hover:bg-cream-100 text-xs font-bold text-forest-700 transition-all">
+                      {uploadingPhoto === "cover" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ImageIcon className="h-4 w-4" />
+                      )}
+                      {uploadingPhoto === "cover" ? "Uploading…" : "Upload photo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadPhoto(f, "cover", setCoverUrl);
+                        }}
+                      />
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="Or paste an image URL"
+                      value={coverUrl}
+                      onChange={(e) => setCoverUrl(e.target.value)}
+                      className={inputClass + " mt-2"}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Gallery */}
+              <div>
+                <span className="block text-sm font-medium text-forest-950 mb-2">
+                  Dish photos
+                </span>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3">
+                  {galleryUrls.map((url) => (
+                    <div key={url} className="relative aspect-square rounded-xl overflow-hidden border border-forest-100 group">
+                      <Image src={url} alt="Dish" fill className="object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeGalleryImage(url)}
+                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 text-forest-700 hover:text-red-600 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label="Remove photo"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <label className="cursor-pointer aspect-square rounded-xl border-2 border-dashed border-forest-200 bg-cream-50 hover:bg-cream-100 flex flex-col items-center justify-center text-forest-500 transition-all">
+                    {uploadingPhoto === "gallery" ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5" />
+                    )}
+                    <span className="text-[10px] font-bold mt-1">
+                      {uploadingPhoto === "gallery" ? "Uploading" : "Add"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadPhoto(f, "gallery", (u) => setGalleryUrls((p) => [...p, u]));
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-forest-400">
+                  Upload at least two dish photos — they are part of the profile
+                  completeness checklist.
+                </p>
               </div>
             </section>
 
