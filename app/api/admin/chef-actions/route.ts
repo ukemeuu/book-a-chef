@@ -199,6 +199,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, is_available: next });
     }
 
+    // Update an existing directory listing. Backs the admin edit modal so a
+    // chef's public details (including phone and email) can be corrected
+    // without touching the database directly.
+    if (action === "update_listing") {
+      const chefId = String(body.chef_id || "");
+      if (!chefId) {
+        return NextResponse.json({ error: "chef_id is required." }, { status: 400 });
+      }
+
+      const text = (v: unknown, max = 500) =>
+        typeof v === "string" ? v.trim().slice(0, max) : undefined;
+      const arr = (v: unknown) =>
+        Array.isArray(v)
+          ? v.filter((x) => typeof x === "string" && x.trim())
+          : undefined;
+
+      const payload: Record<string, any> = {};
+      const set = (key: string, value: unknown) => {
+        if (value !== undefined) payload[key] = value;
+      };
+
+      set("name", text(body.name, 120));
+      set("brand_name", text(body.brand_name, 120));
+      set("tagline", text(body.tagline, 200));
+      set("bio", text(body.bio, 4000));
+      set("city", text(body.city, 80));
+      set("phone", text(body.phone, 40));
+      set("email", text(body.email, 200));
+      set("avatar_url", text(body.avatar_url, 500));
+      set("cover_image_url", text(body.cover_image_url, 500));
+      set("gallery_images", arr(body.gallery_images));
+      set("service_areas", arr(body.service_areas));
+      set("cuisines", arr(body.cuisines));
+      set("dietary_specialties", arr(body.dietary_specialties));
+
+      if (body.price_per_guest != null && Number(body.price_per_guest) >= 0) {
+        payload.price_per_guest = Number(body.price_per_guest);
+      }
+      if (body.min_guests != null) payload.min_guests = Number(body.min_guests);
+      if (body.max_guests != null) payload.max_guests = Number(body.max_guests);
+      if (typeof body.verified === "boolean") payload.verified = body.verified;
+      if (typeof body.featured === "boolean") payload.featured = body.featured;
+      if (typeof body.is_available === "boolean") payload.is_available = body.is_available;
+
+      payload.updated_at = new Date().toISOString();
+
+      const { data, error } = await admin
+        .from("chefs")
+        .update(payload)
+        .eq("id", chefId)
+        .select("*")
+        .maybeSingle();
+
+      if (error || !data) {
+        console.error("[admin/chef-actions] update_listing failed:", error);
+        return NextResponse.json({ error: "Could not save the chef." }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, chef: data });
+    }
+
     // Ad-hoc listing for a chef the team met offline. Creates the login account
     // and the listing together so the chef is never a ghost row.
     if (action === "create_listing") {

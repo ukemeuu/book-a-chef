@@ -51,6 +51,9 @@ const ALL_CUISINES = [
 
 const ALL_DIETARY = ["Halal", "Vegetarian", "Vegan", "Gluten-Free", "Keto", "Pescatarian"];
 
+const inputClass =
+  "w-full px-4 py-3 rounded-xl bg-white border border-forest-200 text-sm font-medium text-forest-950 placeholder-forest-400 outline-none focus:border-forest-950 focus:ring-1 focus:ring-forest-950 transition-colors";
+
 type AdminTab = "overview" | "chefs" | "applications";
 
 export default function AdminPortalPage() {
@@ -74,6 +77,11 @@ export default function AdminPortalPage() {
   const [isListingModalOpen, setIsListingModalOpen] = useState(false);
   const [submittingChef, setSubmittingChef] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
+
+  // Edit modal state — edits an existing chef's public details.
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingChef, setEditingChef] = useState<any>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Photo upload helper
   const uploadPhoto = async (file: File, label: string): Promise<string | null> => {
@@ -476,6 +484,89 @@ export default function AdminPortalPage() {
     }
   };
 
+  const openEditChef = (chef: any) => {
+    setEditingChef({
+      id: chef.id,
+      name: chef.name || "",
+      brand_name: chef.brand || "",
+      tagline: chef.tagline || "",
+      bio: chef.bio || "",
+      city: chef.location || "Nairobi",
+      phone: chef.phone || "",
+      email: chef.email || "",
+      price_per_guest: String(chef.startingPrice || 4500),
+      cuisines: chef.cuisines || [],
+      dietary: chef.dietary || [],
+      avatar: chef.avatar || "",
+      cover: chef.coverImage || "",
+      gallery: chef.gallery || [],
+      verified: chef.verified ?? true,
+      featured: chef.featured ?? false,
+      is_available: chef.isAvailable ?? false,
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingChef) return;
+    setSavingEdit(true);
+    setAdminNotice(null);
+    try {
+      const data = await callChefAction({
+        action: "update_listing",
+        chef_id: editingChef.id,
+        name: editingChef.name,
+        brand_name: editingChef.brand_name,
+        tagline: editingChef.tagline,
+        bio: editingChef.bio,
+        city: editingChef.city,
+        phone: editingChef.phone,
+        email: editingChef.email,
+        price_per_guest: Number(editingChef.price_per_guest) || 0,
+        cuisines: editingChef.cuisines,
+        dietary_specialties: editingChef.dietary,
+        avatar_url: editingChef.avatar,
+        cover_image_url: editingChef.cover,
+        gallery_images: editingChef.gallery,
+        verified: editingChef.verified,
+        featured: editingChef.featured,
+        is_available: editingChef.is_available,
+      });
+
+      if (data.chef) {
+        setChefs((prev) => [
+          mapChefRow(data.chef),
+          ...prev.filter((c) => c.id !== data.chef.id),
+        ]);
+      }
+      setIsEditModalOpen(false);
+      setAdminNotice({ tone: "success", message: `${editingChef.name} updated.` });
+    } catch (err: any) {
+      setAdminNotice({ tone: "error", message: err.message });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const toggleEditCuisine = (c: string) => {
+    setEditingChef((prev: any) => ({
+      ...prev,
+      cuisines: prev.cuisines.includes(c)
+        ? prev.cuisines.filter((i: string) => i !== c)
+        : [...prev.cuisines, c],
+    }));
+  };
+
+  const toggleEditDietary = (d: string) => {
+    setEditingChef((prev: any) => ({
+      ...prev,
+      dietary: prev.dietary.includes(d)
+        ? prev.dietary.filter((i: string) => i !== d)
+        : [...prev.dietary, d],
+    }));
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-cream-50 flex flex-col justify-center items-center">
@@ -871,6 +962,12 @@ export default function AdminPortalPage() {
                           </Link>
                         )}
                         <button
+                          onClick={() => openEditChef(chef)}
+                          className="inline-flex items-center gap-1 text-forest-950 font-bold underline underline-offset-2"
+                        >
+                          Edit
+                        </button>
+                        <button
                           onClick={() => handleLinkChef(chef)}
                           disabled={actionLoadingId === chef.id}
                           className="inline-flex items-center gap-1 text-forest-950 font-bold underline underline-offset-2 disabled:opacity-50"
@@ -1199,6 +1296,217 @@ export default function AdminPortalPage() {
           </div>
         )}
       </main>
+
+      {/* EDIT CHEF MODAL */}
+      {isEditModalOpen && editingChef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/80 backdrop-blur-md">
+          <div className="relative bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 sm:p-10 space-y-6 border border-forest-100 text-left">
+            <button
+              onClick={() => setIsEditModalOpen(false)}
+              className="absolute top-6 right-6 h-9 w-9 rounded-full bg-forest-50 hover:bg-forest-100 text-forest-900 flex items-center justify-center"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="space-y-1">
+              <h2 className="font-sans text-2xl sm:text-3xl font-bold text-forest-950">
+                Edit {editingChef.name}
+              </h2>
+              <p className="text-xs text-forest-600">
+                Update the public profile. Phone and email are shown to customers.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Full name</label>
+                  <input
+                    className={inputClass}
+                    value={editingChef.name}
+                    onChange={(e) => setEditingChef({ ...editingChef, name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Brand / studio</label>
+                  <input
+                    className={inputClass}
+                    value={editingChef.brand_name}
+                    onChange={(e) => setEditingChef({ ...editingChef, brand_name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Phone / WhatsApp</label>
+                  <input
+                    className={inputClass}
+                    placeholder="0712 345 678"
+                    value={editingChef.phone}
+                    onChange={(e) => setEditingChef({ ...editingChef, phone: e.target.value })}
+                  />
+                  <p className="text-[10px] text-forest-500">
+                    Shown on the public profile for direct contact.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Email</label>
+                  <input
+                    type="email"
+                    className={inputClass}
+                    value={editingChef.email}
+                    onChange={(e) => setEditingChef({ ...editingChef, email: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">City</label>
+                  <input
+                    className={inputClass}
+                    value={editingChef.city}
+                    onChange={(e) => setEditingChef({ ...editingChef, city: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Rate per guest (KES)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    value={editingChef.price_per_guest}
+                    onChange={(e) => setEditingChef({ ...editingChef, price_per_guest: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-forest-950">Tagline</label>
+                <input
+                  className={inputClass}
+                  value={editingChef.tagline}
+                  onChange={(e) => setEditingChef({ ...editingChef, tagline: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-forest-950">Bio</label>
+                <textarea
+                  rows={4}
+                  className={inputClass + " resize-y"}
+                  value={editingChef.bio}
+                  onChange={(e) => setEditingChef({ ...editingChef, bio: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <span className="font-bold text-forest-950">Cuisines</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {ALL_CUISINES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => toggleEditCuisine(c)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                        editingChef.cuisines.includes(c)
+                          ? "bg-forest-900 text-white border-forest-900"
+                          : "bg-cream-50 text-forest-800 border-forest-100 hover:bg-cream-100"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="font-bold text-forest-950">Dietary specialties</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {ALL_DIETARY.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => toggleEditDietary(d)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                        editingChef.dietary.includes(d)
+                          ? "bg-forest-900 text-white border-forest-900"
+                          : "bg-cream-50 text-forest-800 border-forest-100 hover:bg-cream-100"
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Avatar URL</label>
+                  <input
+                    className={inputClass}
+                    value={editingChef.avatar}
+                    onChange={(e) => setEditingChef({ ...editingChef, avatar: e.target.value })}
+                  />
+                  <p className="text-[10px] text-forest-500">
+                    Leave blank to use the Book A Chef logo.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Cover image URL</label>
+                  <input
+                    className={inputClass}
+                    value={editingChef.cover}
+                    onChange={(e) => setEditingChef({ ...editingChef, cover: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-4 pt-3 border-t border-forest-100">
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingChef.verified}
+                    onChange={(e) => setEditingChef({ ...editingChef, verified: e.target.checked })}
+                    className="h-4 w-4 rounded accent-forest-950"
+                  />
+                  <span className="text-xs font-bold text-forest-950">Verified (public)</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingChef.featured}
+                    onChange={(e) => setEditingChef({ ...editingChef, featured: e.target.checked })}
+                    className="h-4 w-4 rounded accent-forest-950"
+                  />
+                  <span className="text-xs font-bold text-forest-950">Featured</span>
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingChef.is_available}
+                    onChange={(e) => setEditingChef({ ...editingChef, is_available: e.target.checked })}
+                    className="h-4 w-4 rounded accent-forest-950"
+                  />
+                  <span className="text-xs font-bold text-forest-950">Available</span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-forest-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-5 py-3 rounded-2xl border border-forest-200 text-xs font-bold text-forest-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-8 py-3.5 rounded-2xl bg-forest-900 text-cream-50 font-black text-xs uppercase tracking-widest hover:bg-forest-800 shadow-xl flex items-center gap-2 disabled:opacity-60"
+                >
+                  {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ADD CHEF MODAL */}
       {isListingModalOpen && (
