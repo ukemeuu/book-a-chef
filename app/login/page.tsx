@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   Mail,
   Lock,
@@ -11,15 +11,29 @@ import {
   ChevronLeft,
   Loader2,
   ChefHat,
-  ArrowRight,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get("tab") === "signup" ? "signup" : "signin";
-  const redirectTo = searchParams.get("redirect") || "";
+
+  // Middleware sends chefs here with ?role=chef when they hit the portal while
+  // signed out. Without honouring that, a chef signs in and is dropped on the
+  // customer dashboard, which reads as "my account is not a chef account".
+  const roleIntent = searchParams.get("role") || "";
+  const isChefIntent = roleIntent === "chef";
+  const notice = searchParams.get("message") || "";
+
+  // Only accept in-app paths. A crafted ?redirect=https://evil.example would
+  // otherwise bounce a freshly authenticated user off-site.
+  const rawRedirect = searchParams.get("redirect") || "";
+  const redirectTo = /^\/(?!\/)/.test(rawRedirect) ? rawRedirect : "";
+
+  const initialTab = isChefIntent
+    ? "signin"
+    : searchParams.get("tab") === "signup"
+    ? "signup"
+    : "signin";
 
   const [mode, setMode] = useState<"signin" | "signup" | "forgot_password">(initialTab);
   const [loading, setLoading] = useState(false);
@@ -63,15 +77,18 @@ function LoginForm() {
 
       const userRole = profile?.role || (data.user.user_metadata?.role as any) || "client";
 
-      if (userRole === "admin") {
-        window.location.href = "/admin";
-      } else if (userRole === "chef") {
-        window.location.href = "/chef-dashboard";
-      } else if (redirectTo) {
-        window.location.href = redirectTo;
-      } else {
-        window.location.href = "/dashboard";
-      }
+      // Role always wins over the intent, except for the chef portal: someone
+      // who arrived with ?role=chef but has a client/applicant profile is sent
+      // to the chef dashboard so they can see their application status rather
+      // than a customer booking list they did not ask for.
+      const home =
+        userRole === "admin"
+          ? "/admin"
+          : userRole === "chef" || isChefIntent
+          ? "/chef-dashboard"
+          : redirectTo || "/dashboard";
+
+      window.location.href = home;
     } catch (err: any) {
       setError(err?.message || "An unexpected error occurred.");
     } finally {
@@ -160,13 +177,20 @@ function LoginForm() {
 
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "https://bookachef.co.ke"}/dashboard`,
+        // The recovery link must land on a page that can set a new password.
+        // Pointing it at /dashboard left the user signed in with a password
+        // they could not remember.
+        redirectTo: `${
+          typeof window !== "undefined"
+            ? window.location.origin
+            : process.env.NEXT_PUBLIC_SITE_URL || "https://bookachef.co.ke"
+        }/reset-password`,
       });
 
       if (resetError) {
         setError(resetError.message || "Failed to send reset link.");
       } else {
-        setSuccessMessage("Check your inbox for a reset link.");
+        setSuccessMessage("Check your inbox for a reset link. It may take a minute to arrive.");
       }
     } catch (err: any) {
       setError(err?.message || "Unexpected error.");
@@ -187,19 +211,29 @@ function LoginForm() {
           <div className="w-8 h-8 rounded-lg bg-forest-950 flex items-center justify-center">
             <ChefHat className="h-4 w-4 text-white" />
           </div>
-          <span className="text-lg font-serif font-bold text-forest-950">Book A Chef</span>
+          <span className="text-lg font-bold text-forest-950">Book A Chef</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-forest-950 tracking-tight">
-          {mode === "signin" && "Welcome back"}
+          {mode === "signin" && (isChefIntent ? "Chef sign in" : "Welcome back")}
           {mode === "signup" && "Create your account"}
           {mode === "forgot_password" && "Reset password"}
         </h1>
         <p className="mt-1.5 text-sm text-forest-500">
-          {mode === "signin" && "Sign in to request a private chef"}
+          {mode === "signin" &&
+            (isChefIntent
+              ? "Sign in to your chef portal"
+              : "Sign in to request a private chef")}
           {mode === "signup" && "Join Book A Chef in seconds"}
           {mode === "forgot_password" && "We'll email you a reset link"}
         </p>
       </div>
+
+      {/* Notice from middleware (e.g. "Chef portal authentication required") */}
+      {notice && !error && (
+        <div className="mb-4 p-3.5 rounded-xl bg-cream-100 border border-forest-100 text-forest-700 text-sm font-medium">
+          {notice}
+        </div>
+      )}
 
       {/* Mode Toggle */}
       {mode !== "forgot_password" && (
@@ -213,15 +247,26 @@ function LoginForm() {
           >
             Sign In
           </button>
-          <button
-            type="button"
-            onClick={() => { setMode("signup"); setError(null); }}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              mode === "signup" ? "bg-white text-forest-950 shadow-sm" : "text-forest-500 hover:text-forest-950"
-            }`}
-          >
-            Create Account
-          </button>
+          {isChefIntent ? (
+            // Chef accounts are created through the application flow so the
+            // auth user, profile and application row are created atomically.
+            <Link
+              href="/apply"
+              className="flex-1 py-2.5 rounded-lg text-sm font-medium text-forest-500 hover:text-forest-950 transition-all text-center"
+            >
+              New chef? Apply
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setMode("signup"); setError(null); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                mode === "signup" ? "bg-white text-forest-950 shadow-sm" : "text-forest-500 hover:text-forest-950"
+              }`}
+            >
+              Create Account
+            </button>
+          )}
         </div>
       )}
 
@@ -275,6 +320,13 @@ function LoginForm() {
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign In"}
           </button>
+          {isChefIntent && (
+            <p className="text-xs text-forest-400 text-center">
+              First time signing in? Use{" "}
+              <span className="font-medium text-forest-600">Forgot password</span> to set
+              one with the email you applied with.
+            </p>
+          )}
           <div className="text-center">
             <button
               type="button"
@@ -392,6 +444,15 @@ function LoginForm() {
       )}
 
       {/* Footer */}
+      {!isChefIntent && (
+        <div className="mt-5 text-center text-sm">
+          <span className="text-forest-500">Are you a chef? </span>
+          <Link href="/apply" className="font-medium text-forest-950 underline hover:text-forest-700">
+            Apply to join
+          </Link>
+        </div>
+      )}
+
       <div className="mt-6 text-center text-xs text-forest-400">
         By continuing, you agree to our{" "}
         <Link href="/terms" className="underline hover:text-forest-950">Terms</Link>

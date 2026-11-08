@@ -119,6 +119,9 @@ export default function Navbar() {
               solid ? "text-forest-600" : "text-cream-100/90"
             }`}
           >
+            <Link href="/chefs" className="px-3 py-2 hover:opacity-100 transition-opacity">
+              Browse chefs
+            </Link>
             <Link href="/request" className="px-3 py-2 hover:opacity-100 transition-opacity">
               Request a chef
             </Link>
@@ -226,6 +229,13 @@ export default function Navbar() {
         {mobileMenuOpen && (
           <div className="md:hidden pb-4 pt-2 border-t border-forest-100 bg-white">
             <nav className="flex flex-col">
+              <Link
+                href="/chefs"
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-3 text-sm font-medium text-forest-950 border-b border-forest-100"
+              >
+                Browse chefs
+              </Link>
               <Link
                 href="/request"
                 onClick={() => setMobileMenuOpen(false)}

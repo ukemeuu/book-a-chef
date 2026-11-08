@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { calculateProfileReadiness } from "@/utils/profileReadiness";
+import { runWithSchemaFallback } from "@/utils/schemaFallback";
+import {
+  unpackApplicationMeta,
+  type ApplicationMeta,
+} from "@/utils/chefApplication";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +25,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const {
       chef_id,
       name,
@@ -53,12 +59,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!chef_id) {
+      return NextResponse.json({ error: "chef_id is required." }, { status: 400 });
+    }
+
     // Verify chef record belongs to this user or admin
     const { data: chefRecord, error: fetchErr } = await supabase
       .from("chefs")
       .select("*, menus(*)")
       .eq("id", chef_id)
-      .single();
+      .maybeSingle();
 
     if (fetchErr || !chefRecord) {
       return NextResponse.json({ error: "Chef profile not found." }, { status: 404 });
@@ -70,7 +80,7 @@ export async function POST(request: NextRequest) {
         .from("profiles")
         .select("role")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       if (profile?.role !== "admin") {
         return NextResponse.json(
@@ -80,23 +90,107 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Construct format array
-    const serviceFormats: ("in_home" | "delivery")[] = [];
-    if (allow_in_home) serviceFormats.push("in_home");
-    if (allow_delivery) serviceFormats.push("delivery");
+    // Construct format array. Only rebuild it when the client actually sent the
+    // toggles — an unrelated profile save must not wipe the formats a chef set
+    // earlier.
+    const formatsProvided =
+      typeof allow_in_home === "boolean" || typeof allow_delivery === "boolean";
+
+    const existingFormats: string[] = Array.isArray(chefRecord.service_formats)
+      ? chefRecord.service_formats
+      : [];
+
+    const includeInHome =
+      typeof allow_in_home === "boolean" ? allow_in_home : existingFormats.includes("in_home");
+    const includeDelivery =
+      typeof allow_delivery === "boolean" ? allow_delivery : existingFormats.includes("delivery");
+
+    const serviceFormats: ("in_home" | "delivery")[] = [
+      ...(includeInHome ? (["in_home"] as const) : []),
+      ...(includeDelivery ? (["delivery"] as const) : []),
+    ];
+
+    // Pre-migration fallback.
+    //
+    // The live `chefs` table has no `national_id_number` or `service_formats`.
+    // Those values were captured at application time (or packed into
+    // `portfolio_links`), so reading only the listing columns would mark a
+    // fully-complete chef as incomplete and permanently block the 97% gate.
+    let applicationRow: any = null;
+    let applicationMeta: ApplicationMeta = { v: 1 };
+
+    if (user.email) {
+      const reader = createAdminClient() ?? supabase;
+      const { data } = await reader
+        .from("chef_applications")
+        .select("*")
+        .eq("email", user.email)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        applicationRow = data;
+        applicationMeta = unpackApplicationMeta(data.portfolio_links);
+      }
+    }
+
+    const nationalId = String(
+      national_id_number ??
+        chefRecord.national_id_number ??
+        applicationRow?.national_id_number ??
+        applicationMeta.national_id_number ??
+        ""
+    ).trim();
+
+    let effectiveFormats: string[];
+    if (formatsProvided) {
+      effectiveFormats = serviceFormats;
+    } else if (existingFormats.length) {
+      effectiveFormats = existingFormats;
+    } else if (
+      Array.isArray(applicationRow?.service_formats) &&
+      applicationRow.service_formats.length
+    ) {
+      effectiveFormats = applicationRow.service_formats;
+    } else {
+      effectiveFormats = applicationMeta.service_formats || [];
+    }
+
+    // Normalise menu rows before scoring readiness. Readiness expects the
+    // camelCase `Menu` shape (`pricePerGuest`, parsed `courses`), but the DB
+    // returns snake_case (`price_per_guest`) with `courses` as JSON. Passing raw
+    // rows made the "complete menu" check fail for every chef, capping
+    // completeness at 94% and making the 97% go-live gate impossible to pass.
+    const menuRows: any[] = Array.isArray(chefRecord.menus) ? chefRecord.menus : [];
+    const normalizedMenus = menuRows.map((row) => {
+      let courses = row.courses;
+      if (typeof courses === "string") {
+        try {
+          courses = JSON.parse(courses);
+        } catch {
+          courses = {};
+        }
+      }
+      return {
+        ...row,
+        pricePerGuest: Number(row.pricePerGuest ?? row.price_per_guest ?? 0),
+        courses: courses || {},
+      };
+    });
 
     // Recalculate profile readiness server-side
     const readiness = calculateProfileReadiness({
       name: name ?? chefRecord.name,
       phone: body.phone ?? chefRecord.phone,
-      nationalIdNumber: national_id_number ?? chefRecord.national_id_number,
+      nationalIdNumber: nationalId,
       avatar: avatar_url ?? chefRecord.avatar_url,
       coverImage: cover_image_url ?? chefRecord.cover_image_url,
       gallery: gallery_images ?? chefRecord.gallery_images,
       brand: brand_name ?? chefRecord.brand_name,
       tagline: tagline ?? chefRecord.tagline,
       partnerType: partner_type ?? chefRecord.partner_type,
-      serviceFormats,
+      serviceFormats: effectiveFormats as ("in_home" | "delivery")[],
       city: city ?? chefRecord.city,
       serviceAreas: service_areas ?? chefRecord.service_areas,
       bio: bio ?? chefRecord.bio,
@@ -106,7 +200,7 @@ export async function POST(request: NextRequest) {
       startingPrice: price_per_guest ? Number(price_per_guest) : Number(chefRecord.price_per_guest),
       minGuests: min_guests ? Number(min_guests) : chefRecord.min_guests,
       maxGuests: max_guests ? Number(max_guests) : chefRecord.max_guests,
-      menus: chefRecord.menus || [],
+      menus: normalizedMenus,
     });
 
     // 97% Gate Check: Cannot go live if under 97%
@@ -145,30 +239,38 @@ export async function POST(request: NextRequest) {
       gallery_images: gallery_images ?? chefRecord.gallery_images,
       partner_type: partner_type ?? chefRecord.partner_type,
       restaurant_name: restaurant_name ?? chefRecord.restaurant_name,
-      allow_in_home: allow_in_home ?? true,
-      allow_delivery: allow_delivery ?? true,
-      service_formats: serviceFormats,
+      allow_in_home: includeInHome,
+      allow_delivery: includeDelivery,
       national_id_number: national_id_number ?? chefRecord.national_id_number,
       is_available: finalIsAvailable,
       updated_at: new Date().toISOString(),
     };
 
-    const { data: updated, error: updateErr } = await supabase
-      .from("chefs")
-      .update(updatePayload)
-      .eq("id", chef_id)
-      .select()
-      .single();
+    if (body.phone) updatePayload.phone = body.phone;
+    // Only write the array when the caller sent toggles, so a drifted or
+    // missing column cannot strip existing data.
+    if (formatsProvided) updatePayload.service_formats = serviceFormats;
 
-    if (updateErr) {
-      console.warn("DB chef update error:", updateErr.message);
-      // Even if schema column is newly added, return computed readiness
-      return NextResponse.json({
-        success: true,
-        readiness,
-        message: "Profile updated successfully.",
-        isAvailable: finalIsAvailable,
-      });
+    const { data: updated, error: updateErr, dropped } = await runWithSchemaFallback(
+      updatePayload,
+      (payload) =>
+        supabase.from("chefs").update(payload).eq("id", chef_id).select().maybeSingle()
+    );
+
+    if (updateErr || !updated) {
+      // A real write failure must never be reported as success — the chef would
+      // believe their profile was saved and stay stuck at a low completeness
+      // score with no idea why.
+      console.error("[chef/update-profile] Update failed:", updateErr);
+      return NextResponse.json(
+        {
+          error:
+            updateErr?.message ||
+            "We could not save your profile. Please try again, and contact support if it persists.",
+          readiness,
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
@@ -176,6 +278,9 @@ export async function POST(request: NextRequest) {
       chef: updated,
       readiness,
       isAvailable: finalIsAvailable,
+      // Report which drifted columns were skipped so the UI can warn instead of
+      // silently losing input.
+      droppedFields: dropped,
       message: finalIsAvailable ? "Chef is live on marketplace!" : "Profile saved.",
     });
   } catch (error: any) {

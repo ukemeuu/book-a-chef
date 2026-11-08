@@ -34,11 +34,16 @@ import {
   MessageCircle,
   Send,
   Check,
+  ExternalLink,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { ChefApplication, Booking, Chef, INITIAL_CHEFS } from "@/utils/data";
+import { Booking } from "@/utils/data";
 import { createClient } from "@/utils/supabase/client";
+import {
+  applicationCompleteness,
+  unpackApplicationMeta,
+} from "@/utils/chefApplication";
 import {
   resolveCommission,
   LEGACY_CHEF_PAYOUT_RATE,
@@ -68,11 +73,17 @@ export default function AdminPortalPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "dispatch" | "applications" | "bookings" | "chefs">("overview");
 
-  const [applications, setApplications] = useState<ChefApplication[]>([]);
+  const [applications, setApplications] = useState<any[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [chefs, setChefs] = useState<Chef[]>(INITIAL_CHEFS);
+  const [chefs, setChefs] = useState<any[]>([]);
+  const [unlinkedChefs, setUnlinkedChefs] = useState<any[]>([]);
   const [appStatusFilter, setAppStatusFilter] = useState<"pending" | "approved" | "all">("pending");
-  const [qualifyingAppId, setQualifyingAppId] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [adminNotice, setAdminNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+    whatsappUrl?: string | null;
+  } | null>(null);
 
   // Uber Dispatch State
   const [dispatchFilter, setDispatchFilter] = useState<"all" | "pending" | "assigned" | "active">("all");
@@ -94,17 +105,37 @@ export default function AdminPortalPage() {
       return;
     }
     const assignedChef = chefs.find((c) => c.id === chefId);
+    if (assignedChef && !assignedChef.userId) {
+      alert(
+        `${assignedChef.name} has no login account, so they cannot accept this job. Link a login first.`
+      );
+      return;
+    }
     setAssigningId(bookingId);
     try {
-      const { error } = await supabase
+      const { data: assignedRows, error } = await supabase
         .from("bookings")
         .update({
           chef_id: chefId,
           status: "assigned",
+          assigned_at: new Date().toISOString(),
         })
-        .eq("id", bookingId);
+        // Only take an unassigned request, or reassign one this chef already
+        // owns. Without the guard two admins can double-assign a booking.
+        .in("status", ["pending_assignment", "pending", "assigned", "declined"])
+        .eq("id", bookingId)
+        .select("id");
 
-      if (error) console.warn("Supabase update error:", error);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+      if (!assignedRows || assignedRows.length === 0) {
+        alert(
+          "This booking changed while you were looking at it (it may already be accepted or cancelled). Reload and try again."
+        );
+        return;
+      }
 
       setBookings((prev) =>
         prev.map((b) =>
@@ -159,6 +190,8 @@ export default function AdminPortalPage() {
 
   // Form Fields for Listing a Chef
   const [chefName, setChefName] = useState("");
+  const [chefEmail, setChefEmail] = useState("");
+  const [chefPhone, setChefPhone] = useState("");
   const [brandName, setBrandName] = useState("");
   const [tagline, setTagline] = useState("Book A Chef Certified Master");
   const [city, setCity] = useState("Nairobi");
@@ -171,10 +204,7 @@ export default function AdminPortalPage() {
   const [selectedDietary, setSelectedDietary] = useState<string[]>(["Halal"]);
   const [bio, setBio] = useState("");
   const [menuTitle, setMenuTitle] = useState("Royal Signature Degustation");
-  const [menuDesc, setMenuDesc] = useState("3-course handcrafted fine dining menu.");
-  const [appetizerName, setAppetizerName] = useState("");
   const [mainName, setMainName] = useState("");
-  const [dessertName, setDessertName] = useState("");
 
   const supabase = createClient();
 
@@ -214,13 +244,15 @@ export default function AdminPortalPage() {
           .select("*")
           .order("created_at", { ascending: false });
 
-        const liveChefNames = new Set(
-          (dbChefs || []).map((c: any) => c.name?.toLowerCase().trim())
-        );
+        if (dbChefs) {
+          setUnlinkedChefs(
+            (dbChefs as any[]).filter((c) => !c.user_id)
+          );
 
-        if (dbChefs && dbChefs.length > 0) {
-          const mapped: Chef[] = dbChefs.map((c: any) => ({
+          const mapped: any[] = (dbChefs as any[]).map((c: any) => ({
             id: c.id,
+            userId: c.user_id || null,
+            email: c.email || null,
             name: c.name,
             brand: c.brand_name || "Culinary Studio",
             tagline: c.tagline || "Book A Chef Certified Master",
@@ -239,7 +271,7 @@ export default function AdminPortalPage() {
             verified: c.verified ?? true,
             certificationBadge: "Book A Chef Certified • Meal Tasted & Approved",
             featured: c.featured ?? false,
-            isAvailable: c.is_available ?? true,
+            isAvailable: c.is_available ?? false,
             menus: [],
             reviews: [],
           }));
@@ -256,37 +288,41 @@ export default function AdminPortalPage() {
           .select("*")
           .order("created_at", { ascending: false });
 
-        if (dbApps && dbApps.length > 0) {
+        if (dbApps) {
           setApplications(
-            dbApps.map((a: any) => {
+            (dbApps as any[]).map((a: any) => {
               const displayName =
                 a.full_name ||
                 (a.first_name ? `${a.first_name} ${a.last_name || ""}`.trim() : "") ||
                 a.email?.split("@")[0] ||
                 "Chef Applicant";
 
-              const isLive =
-                liveChefNames.has(displayName.toLowerCase().trim()) ||
-                (a.full_name && liveChefNames.has(a.full_name.toLowerCase().trim()));
+              const meta = unpackApplicationMeta(a.portfolio_links);
 
-              const status = isLive ? "approved" : (a.status || "pending");
-
+              // Status comes from the row, never from a name match. Inferring
+              // "approved" by comparing strings marked applications approved
+              // that had never been reviewed.
               return {
                 id: a.id,
+                userId: a.user_id || null,
                 fullName: displayName,
-                email: a.email || "No email",
+                email: a.email || "",
                 phone: a.phone || a.phone_number || "",
                 brandName: a.brand_name,
                 experienceYears: a.experience_years || "3+ years",
                 city: a.city || "Nairobi",
                 neighborhood: a.neighborhood || "Kilimani",
                 cuisines: a.cuisines || [],
-                dietary: a.dietary || [],
+                dietary: a.dietary || a.dietary_specialties || [],
                 startingPrice: Number(a.starting_price) || 4500,
-                specialtyDish: a.specialty_dish || "Signature Course",
+                specialtyDish: a.specialty_dish || "Signature course",
                 bio: a.bio || "",
-                status: status as any,
+                status: a.status || "pending",
                 createdAt: a.created_at,
+                meta,
+                nationalIdNumber: a.national_id_number || meta.national_id_number || "",
+                serviceFormats: a.service_formats || meta.service_formats || [],
+                completeness: applicationCompleteness(a),
               };
             })
           );
@@ -343,38 +379,171 @@ export default function AdminPortalPage() {
   };
 
   // Open modal pre-filled from an application
-  const qualifyApplicant = (app: ChefApplication) => {
-    setQualifyingAppId(app.id);
-    setChefName(app.fullName);
-    setBrandName(app.brandName || `${app.fullName} Kitchens`);
-    setCity(app.city || "Nairobi");
-    setPricePerGuest(app.startingPrice ? app.startingPrice.toString() : "4500");
-    setSelectedCuisines(app.cuisines.length > 0 ? app.cuisines : ["Swahili"]);
-    setSelectedDietary(app.dietary.length > 0 ? app.dietary : ["Halal"]);
-    setBio(app.bio || `Certified master private chef specializing in ${app.specialtyDish}.`);
-    setMainName(app.specialtyDish || "Signature Course");
-    setIsListingModalOpen(true);
+  const mapChefRow = (c: any) => ({
+    id: c.id,
+    userId: c.user_id || null,
+    email: c.email || null,
+    name: c.name,
+    brand: c.brand_name || "Culinary Studio",
+    tagline: c.tagline || "Book A Chef Certified Master",
+    location: c.city || "Nairobi",
+    serviceAreas: c.service_areas || ["Kilimani", "Karen", "Runda"],
+    rating: Number(c.rating) || 5.0,
+    reviewsCount: c.reviews_count || 0,
+    avatar: c.avatar_url,
+    coverImage: c.cover_image_url,
+    gallery: c.gallery_images || [],
+    startingPrice: Number(c.price_per_guest) || 4000,
+    cuisines: c.cuisines || [],
+    dietary: c.dietary_specialties || [],
+    bio: c.bio || "",
+    culinaryPhilosophy: c.culinary_philosophy || "",
+    verified: c.verified ?? true,
+    certificationBadge: "Book A Chef Certified • Meal Tasted & Approved",
+    featured: c.featured ?? false,
+    isAvailable: c.is_available ?? false,
+    menus: [],
+    reviews: [],
+  });
+
+  const callChefAction = async (payload: Record<string, any>) => {
+    const response = await fetch("/api/admin/chef-actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "The action failed. Please retry.");
+    }
+    return data;
   };
 
-  // Update application status directly
-  const handleUpdateAppStatus = async (
-    appId: string,
-    nextStatus: "approved" | "rejected" | "pending"
-  ) => {
+  // One click: creates or links the login account, creates the listing, seeds a
+  // menu, and returns a WhatsApp invite with a password-set link.
+  const handleApproveApplication = async (app: any) => {
+    setActionLoadingId(app.id);
+    setAdminNotice(null);
     try {
-      await supabase
-        .from("chef_applications")
-        .update({ status: nextStatus })
-        .eq("id", appId);
+      const data = await callChefAction({
+        action: "approve",
+        application_id: app.id,
+      });
 
       setApplications((prev) =>
-        prev.map((a) => (a.id === appId ? { ...a, status: nextStatus } : a))
+        prev.map((a) =>
+          a.id === app.id ? { ...a, status: "approved", userId: data.user_id } : a
+        )
       );
+      if (data.chef) {
+        setChefs((prev) => [
+          mapChefRow(data.chef),
+          ...prev.filter((c) => c.id !== data.chef.id),
+        ]);
+        setUnlinkedChefs((prev) => prev.filter((c) => c.id !== data.chef.id));
+      }
+      setAdminNotice({
+        tone: "success",
+        message: data.user_id
+          ? `${app.fullName} is approved. Their login is ${data.email} and the invite link is ready.`
+          : `${app.fullName}'s listing was created, but no login account could be attached. Add an email and use Invite.`,
+        whatsappUrl: data.whatsapp_url,
+      });
     } catch (err: any) {
-      console.warn("Status update error:", err);
+      setAdminNotice({ tone: "error", message: err.message });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleInviteApplicant = async (app: any) => {
+    setActionLoadingId(app.id);
+    setAdminNotice(null);
+    try {
+      const data = await callChefAction({
+        action: "invite",
+        application_id: app.id,
+      });
+      setAdminNotice({
+        tone: data.user_id ? "success" : "error",
+        message: data.user_id
+          ? `Login ready for ${app.email}. Send the WhatsApp invite so they can set a password.`
+          : data.message || "Could not create the login.",
+        whatsappUrl: data.whatsapp_url,
+      });
+    } catch (err: any) {
+      setAdminNotice({ tone: "error", message: err.message });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleSetApplicationStatus = async (
+    appId: string,
+    status: "pending" | "under_review" | "rejected"
+  ) => {
+    setActionLoadingId(appId);
+    setAdminNotice(null);
+    try {
+      await callChefAction({
+        action: "set_status",
+        application_id: appId,
+        status,
+      });
       setApplications((prev) =>
-        prev.map((a) => (a.id === appId ? { ...a, status: nextStatus } : a))
+        prev.map((a) => (a.id === appId ? { ...a, status } : a))
       );
+      setAdminNotice({
+        tone: "success",
+        message:
+          status === "rejected"
+            ? "Application declined. The applicant can revise and resubmit from their dashboard."
+            : `Application moved to ${status.replace("_", " ")}.`,
+      });
+    } catch (err: any) {
+      setAdminNotice({ tone: "error", message: err.message });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Attach a legacy listing (user_id IS NULL) to a real login.
+  const handleLinkChef = async (chef: any) => {
+    const email = window.prompt(
+      `Email address for ${chef.name}. This creates or links their login.`,
+      chef.email || ""
+    );
+    if (!email) return;
+    const phone = window.prompt(
+      `Phone number for ${chef.name} (used for the WhatsApp invite).`,
+      ""
+    );
+
+    setActionLoadingId(chef.id);
+    setAdminNotice(null);
+    try {
+      const data = await callChefAction({
+        action: "link_chef",
+        chef_id: chef.id,
+        email: email.trim(),
+        full_name: chef.name,
+        phone: phone || "",
+      });
+      setChefs((prev) =>
+        prev.map((c) =>
+          c.id === chef.id ? { ...c, userId: data.user_id, email: email.trim() } : c
+        )
+      );
+      setUnlinkedChefs((prev) => prev.filter((c) => c.id !== chef.id));
+      setAdminNotice({
+        tone: "success",
+        message: `${chef.name} can now sign in as ${email}. Send the invite to set a password.`,
+        whatsappUrl: data.whatsapp_url,
+      });
+    } catch (err: any) {
+      setAdminNotice({ tone: "error", message: err.message });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -382,114 +551,41 @@ export default function AdminPortalPage() {
   const handlePublishChef = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmittingChef(true);
+    setAdminNotice(null);
 
     const gallery = [dishPhoto1, dishPhoto2].filter(Boolean);
 
-    const chefPayload = {
-      name: chefName.trim(),
-      brand_name: brandName.trim() || `${chefName} Culinary`,
-      tagline: tagline.trim() || "Book A Chef Certified Master",
-      city: city.trim(),
-      service_areas: ["Kilimani", "Karen", "Runda", "Westlands", "Gigiri"],
-      price_per_guest: parseInt(pricePerGuest) || 4500,
-      cuisines: selectedCuisines,
-      dietary_specialties: selectedDietary,
-      bio: bio.trim() || "Certified master chef wearing the official Book A Chef uniform. Meal tasted & approved by our executive panel.",
-      culinary_philosophy: "Fresh organic ingredients, Michelin-level technique, and spotless kitchen care.",
-      avatar_url: avatarUrl.trim(),
-      cover_image_url: coverDishUrl.trim(),
-      gallery_images: gallery,
-      verified: true,
-      is_available: true,
-      rating: 5.0,
-      reviews_count: 1,
-    };
-
     try {
-      // 1. Insert chef into Supabase
-      const { data: chefData, error: cErr } = await supabase
-        .from("chefs")
-        .insert([chefPayload])
-        .select();
-
-      const newChefId = chefData?.[0]?.id || `c_${Date.now()}`;
-
-      // 2. Insert initial signature menu
-      if (chefData?.[0]?.id) {
-        await supabase.from("menus").insert([
-          {
-            chef_id: newChefId,
-            title: menuTitle.trim() || "Royal Tasting Degustation",
-            description: menuDesc.trim() || "3-course signature dining experience.",
-            price_per_guest: parseInt(pricePerGuest) || 4500,
-            courses: {
-              appetizer: appetizerName ? { name: appetizerName, description: "Seasonal creation" } : undefined,
-              main: { name: mainName || "Chef's Signature Course", description: "Farm fresh ingredients" },
-              dessert: dessertName ? { name: dessertName, description: "Handcrafted dessert" } : undefined,
-            },
-          },
-        ]);
-      }
-
-      // 3. Mark application as approved if linked to an applicant
-      if (qualifyingAppId) {
-        try {
-          await supabase
-            .from("chef_applications")
-            .update({ status: "approved" })
-            .eq("id", qualifyingAppId);
-        } catch (e) {}
-
-        setApplications((prev) =>
-          prev.map((a) => (a.id === qualifyingAppId ? { ...a, status: "approved" } : a))
-        );
-        setQualifyingAppId(null);
-      }
-
-      // 4. Update local state
-      const createdChef: Chef = {
-        id: newChefId,
-        name: chefName,
-        brand: brandName || `${chefName} Kitchens`,
-        tagline: tagline,
-        location: city,
-        serviceAreas: ["Kilimani", "Karen", "Runda", "Westlands"],
-        rating: 5.0,
-        reviewsCount: 1,
-        avatar: avatarUrl,
-        coverImage: coverDishUrl,
-        gallery: gallery,
-        startingPrice: parseInt(pricePerGuest) || 4500,
+      const data = await callChefAction({
+        action: "create_listing",
+        full_name: chefName.trim(),
+        email: chefEmail.trim(),
+        phone: chefPhone.trim(),
+        brand_name: brandName.trim(),
+        tagline,
+        city,
+        price_per_guest: Number(pricePerGuest) || 4500,
         cuisines: selectedCuisines,
         dietary: selectedDietary,
-        bio: bio,
-        culinaryPhilosophy: "Spotless kitchen care and pure culinary mastery.",
-        verified: true,
-        certificationBadge: "Book A Chef Certified • Meal Tasted & Approved",
-        featured: true,
-        isAvailable: true,
-        menus: [
-          {
-            id: `m_${Date.now()}`,
-            title: menuTitle,
-            tag: "Signature",
-            description: menuDesc,
-            pricePerGuest: parseInt(pricePerGuest) || 4500,
-            courses: {
-              appetizer: appetizerName ? { name: appetizerName, description: "Appetizer" } : undefined,
-              main: { name: mainName || "Signature Main", description: "Main Course" },
-              dessert: dessertName ? { name: dessertName, description: "Dessert" } : undefined,
-            },
-          },
-        ],
-        reviews: [],
-      };
+        bio: bio.trim(),
+        avatar_url: avatarUrl.trim(),
+        cover_image_url: coverDishUrl.trim(),
+        gallery_images: gallery,
+      });
 
-      setChefs((prev) => [createdChef, ...prev]);
+      if (data.chef) {
+        setChefs((prev) => [mapChefRow(data.chef), ...prev]);
+      }
       setIsListingModalOpen(false);
-      alert(`Chef ${chefName} has been officially listed and published live to Book A Chef!`);
+      setChefEmail("");
+      setChefPhone("");
+      setAdminNotice({
+        tone: "success",
+        message: `${chefName} has an account and a listing. Send the WhatsApp invite so they can set a password and go online.`,
+        whatsappUrl: data.whatsapp_url,
+      });
     } catch (err: any) {
-      alert("Error publishing chef: " + err.message);
+      setAdminNotice({ tone: "error", message: err.message });
     } finally {
       setSubmittingChef(false);
     }
@@ -497,12 +593,19 @@ export default function AdminPortalPage() {
 
   const handleToggleChefAvailability = async (chefId: string, current: boolean) => {
     const next = !current;
+    setAdminNotice(null);
     try {
-      await supabase.from("chefs").update({ is_available: next }).eq("id", chefId);
-    } catch (e) {}
-    setChefs((prev) =>
-      prev.map((c) => (c.id === chefId ? { ...c, isAvailable: next } : c))
-    );
+      const data = await callChefAction({
+        action: "set_available",
+        chef_id: chefId,
+        is_available: next,
+      });
+      setChefs((prev) =>
+        prev.map((c) => (c.id === chefId ? { ...c, isAvailable: data.is_available } : c))
+      );
+    } catch (err: any) {
+      setAdminNotice({ tone: "error", message: err.message });
+    }
   };
 
   if (loading) {
@@ -563,6 +666,37 @@ export default function AdminPortalPage() {
           </button>
         </div>
 
+        {adminNotice && (
+          <div
+            className={`mb-5 rounded-2xl border px-4 py-3 text-sm font-medium flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${
+              adminNotice.tone === "success"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : "bg-red-50 border-red-200 text-red-700"
+            }`}
+          >
+            <span>{adminNotice.message}</span>
+            <div className="flex items-center gap-3 shrink-0">
+              {adminNotice.whatsappUrl && (
+                <a
+                  href={adminNotice.whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-emerald-700"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Send WhatsApp invite
+                </a>
+              )}
+              <button
+                onClick={() => setAdminNotice(null)}
+                className="text-xs font-medium underline underline-offset-2 opacity-70 hover:opacity-100"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 text-left">
           <div className="bg-white rounded-2xl border border-forest-100 p-5">
@@ -594,7 +728,9 @@ export default function AdminPortalPage() {
           <div className="bg-white rounded-2xl border border-forest-100 p-5">
             <p className="text-[10px] font-medium text-forest-400 uppercase mb-1.5">Chefs</p>
             <p className="text-xl sm:text-2xl font-bold text-forest-950">{chefs.length}</p>
-            <p className="text-xs text-forest-500 mt-0.5">Verified</p>
+            <p className="text-xs text-forest-500 mt-0.5">
+              {chefs.filter((c) => c.isAvailable).length} live in marketplace
+            </p>
           </div>
 
           <div className="bg-white rounded-2xl border border-forest-100 p-5">
@@ -681,10 +817,10 @@ export default function AdminPortalPage() {
         {/* TAB 1: OVERVIEW */}
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
-            <div className="lg:col-span-8 bg-white rounded-[32px] p-6 sm:p-8 border border-forest-100 shadow-sm space-y-6">
+            <div className="lg:col-span-8 bg-white rounded-2xl p-6 sm:p-8 border border-forest-100 shadow-sm space-y-6">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="font-serif text-2xl font-bold text-forest-950">
+                  <h3 className="font-sans text-2xl font-bold text-forest-950">
                     Certified Chef Marketplace Status
                   </h3>
                   <p className="text-xs text-forest-500">Live active listings with certified meal tasting badges.</p>
@@ -739,8 +875,8 @@ export default function AdminPortalPage() {
             </div>
 
             {/* Quick Admin Actions */}
-            <div className="lg:col-span-4 bg-white rounded-[32px] p-6 sm:p-8 border border-forest-100 shadow-sm space-y-4">
-              <h3 className="font-serif text-xl font-bold text-forest-950">
+            <div className="lg:col-span-4 bg-white rounded-2xl p-6 sm:p-8 border border-forest-100 shadow-sm space-y-4">
+              <h3 className="font-sans text-xl font-bold text-forest-950">
                 Admin Publishing Controls
               </h3>
               <p className="text-xs text-forest-500 leading-relaxed">
@@ -769,54 +905,114 @@ export default function AdminPortalPage() {
           <div className="space-y-6 text-left">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
               <div>
-                <h3 className="font-serif text-2xl font-bold text-forest-950">
-                  Certified Chef Directory ({chefs.length})
+                <h3 className="text-2xl font-bold text-forest-950">
+                  Chef directory ({chefs.length})
                 </h3>
                 <p className="text-xs text-forest-500">
-                  All active chefs wearing official Book A Chef uniforms and verified by our tasting panel.
+                  A chef only receives dispatch after their listing is linked to a
+                  login account and they switch themselves online.
                 </p>
               </div>
               <button
                 onClick={() => setIsListingModalOpen(true)}
-                className="px-5 py-3 rounded-2xl bg-forest-900 text-white font-bold text-xs uppercase tracking-wider hover:bg-forest-800 flex items-center gap-1.5 shadow-md self-start sm:self-auto"
+                className="px-5 py-3 rounded-xl bg-forest-950 text-white font-bold text-sm hover:bg-forest-800 flex items-center gap-1.5 self-start sm:self-auto"
               >
-                <Plus className="h-4 w-4" /> List New Chef
+                <Plus className="h-4 w-4" /> Add chef
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {unlinkedChefs.length > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-forest-950">
+                      {unlinkedChefs.length} chef
+                      {unlinkedChefs.length === 1 ? "" : "s"} cannot sign in
+                    </p>
+                    <p className="text-xs text-forest-600 mt-1 mb-3">
+                      These listings have no login account, so dispatch can never
+                      deliver a booking to them. Link an email to create the
+                      account and send an invite.
+                    </p>
+                    <div className="space-y-2">
+                      {unlinkedChefs.map((chef) => (
+                        <div
+                          key={chef.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl bg-white border border-amber-200 px-3 py-2"
+                        >
+                          <div className="text-xs">
+                            <span className="font-bold text-forest-950">
+                              {chef.name}
+                            </span>
+                            <span className="text-forest-500">
+                              {" "}
+                              · {chef.city || "Nairobi"} · KES{" "}
+                              {Number(chef.price_per_guest || 0).toLocaleString()}
+                              /guest
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleLinkChef(chef)}
+                            disabled={actionLoadingId === chef.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-forest-950 text-white text-xs font-bold hover:bg-forest-800 disabled:opacity-50"
+                          >
+                            {actionLoadingId === chef.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Mail className="h-3.5 w-3.5" />
+                            )}
+                            Link login
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {chefs.map((chef) => (
                 <div
                   key={chef.id}
-                  className="bg-white rounded-[32px] p-6 border border-forest-100 shadow-sm space-y-4 flex flex-col justify-between"
+                  className="bg-white rounded-2xl p-5 border border-forest-100 space-y-4 flex flex-col justify-between"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="relative h-14 w-14 rounded-2xl overflow-hidden shrink-0 border border-forest-200">
-                        <Image src={chef.avatar} alt={chef.name} fill className="object-cover" />
+                      <div className="relative h-14 w-14 rounded-xl overflow-hidden shrink-0 border border-forest-100 bg-cream-100">
+                        {chef.avatar ? (
+                          <Image src={chef.avatar} alt={chef.name} fill className="object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <ChefHat className="h-6 w-6 text-forest-400" />
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <h4 className="font-serif text-lg font-bold text-forest-950 leading-tight">
+                      <div className="min-w-0">
+                        <h4 className="text-base font-bold text-forest-950 leading-tight truncate">
                           {chef.name}
                         </h4>
-                        <p className="text-xs text-forest-600 font-medium">{chef.brand}</p>
-                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-champagne-700 bg-cream-100 px-2 py-0.5 rounded-full mt-1">
-                          <Award className="h-3 w-3" /> Meal Tasted & Certified
-                        </span>
+                        <p className="text-xs text-forest-600 truncate">{chef.brand}</p>
+                        <p className="text-[11px] text-forest-500 truncate">
+                          {chef.email || "No email on file"}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="relative aspect-video rounded-2xl overflow-hidden bg-forest-100">
-                      <Image src={chef.coverImage} alt={chef.name} fill className="object-cover" />
-                    </div>
+                    {chef.coverImage && (
+                      <div className="relative aspect-video rounded-xl overflow-hidden bg-forest-100">
+                        <Image src={chef.coverImage} alt={chef.name} fill className="object-cover" />
+                      </div>
+                    )}
 
-                    <p className="text-xs text-forest-700 line-clamp-2">{chef.bio}</p>
+                    <p className="text-xs text-forest-600 line-clamp-2">{chef.bio}</p>
 
                     <div className="flex flex-wrap gap-1">
-                      {chef.cuisines.map((c) => (
+                      {chef.cuisines.slice(0, 5).map((c: string) => (
                         <span
                           key={c}
-                          className="px-2 py-0.5 rounded-full bg-forest-50 text-forest-800 text-[9px] font-bold"
+                          className="px-2 py-0.5 rounded-full bg-forest-50 text-forest-800 text-[10px] font-medium"
                         >
                           {c}
                         </span>
@@ -834,19 +1030,43 @@ export default function AdminPortalPage() {
                         className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
                           chef.isAvailable
                             ? "bg-emerald-100 text-emerald-800"
-                            : "bg-gray-100 text-gray-600"
+                            : "bg-cream-100 text-forest-600"
                         }`}
                       >
-                        {chef.isAvailable ? "● Live" : "● Paused"}
+                        {chef.isAvailable ? "● Online" : "● Offline"}
                       </button>
                     </div>
 
-                    <Link
-                      href={`/chef/${chef.id}`}
-                      className="block w-full text-center py-2.5 rounded-xl bg-cream-100 hover:bg-cream-200 text-forest-950 font-bold text-xs transition-colors"
-                    >
-                      View Public Profile →
-                    </Link>
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <span
+                        className={
+                          chef.userId
+                            ? "text-emerald-700 font-medium"
+                            : "text-amber-700 font-medium"
+                        }
+                      >
+                        {chef.userId ? "Login linked" : "No login"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {chef.slug && (
+                          <Link
+                            href={`/chefs/${chef.slug}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-1 text-forest-600 hover:text-forest-950 font-medium"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            View
+                          </Link>
+                        )}
+                        <button
+                          onClick={() => handleLinkChef(chef)}
+                          disabled={actionLoadingId === chef.id}
+                          className="inline-flex items-center gap-1 text-forest-950 font-bold underline underline-offset-2 disabled:opacity-50"
+                        >
+                          {chef.userId ? "Send invite" : "Link login"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -857,55 +1077,56 @@ export default function AdminPortalPage() {
         {/* TAB 3: INBOUND APPLICATIONS */}
         {activeTab === "applications" && (
           <div className="space-y-6 text-left">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col gap-3">
               <div>
-                <h3 className="font-serif text-2xl font-bold text-forest-950">
-                  Inbound Chef Applications
+                <h3 className="text-2xl font-bold text-forest-950">
+                  Chef applications
                 </h3>
                 <p className="text-xs text-forest-500">
-                  Review applicant details, conduct 10-minute Video KYC, or qualify & publish live to the marketplace.
+                  Approving creates the login account, the listing, and a
+                  signature menu in one step, then gives you a WhatsApp invite.
                 </p>
               </div>
 
-              {/* Status Filter Tabs */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => setAppStatusFilter("pending")}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                    appStatusFilter === "pending"
-                      ? "bg-amber-500 text-white shadow-sm"
-                      : "bg-white text-forest-700 hover:bg-cream-100 border border-forest-100"
-                  }`}
-                >
-                  Pending ({applications.filter((a) => a.status === "pending").length})
-                </button>
-                <button
-                  onClick={() => setAppStatusFilter("approved")}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                    appStatusFilter === "approved"
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "bg-white text-forest-700 hover:bg-cream-100 border border-forest-100"
-                  }`}
-                >
-                  Approved ({applications.filter((a) => a.status === "approved").length})
-                </button>
-                <button
-                  onClick={() => setAppStatusFilter("all")}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                    appStatusFilter === "all"
-                      ? "bg-forest-900 text-white shadow-sm"
-                      : "bg-white text-forest-700 hover:bg-cream-100 border border-forest-100"
-                  }`}
-                >
-                  All ({applications.length})
-                </button>
+              <div className="flex border-b border-forest-100 overflow-x-auto">
+                {(
+                  [
+                    ["pending", `Pending (${applications.filter((a) => a.status === "pending" || a.status === "under_review").length})`],
+                    ["approved", `Approved (${applications.filter((a) => a.status === "approved").length})`],
+                    ["all", `All (${applications.length})`],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setAppStatusFilter(value)}
+                    className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                      appStatusFilter === value
+                        ? "border-forest-950 text-forest-950"
+                        : "border-transparent text-forest-500 hover:text-forest-800"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {applications.filter((a) => (appStatusFilter === "all" ? true : a.status === appStatusFilter)).length > 0 ? (
+            {applications.filter((a) => (appStatusFilter === "all"
+                        ? true
+                        : appStatusFilter === "pending"
+                        ? a.status === "pending" ||
+                          a.status === "under_review" ||
+                          a.status === "rejected"
+                        : a.status === appStatusFilter)).length > 0 ? (
               <div className="grid grid-cols-1 gap-6">
                 {applications
-                  .filter((a) => (appStatusFilter === "all" ? true : a.status === appStatusFilter))
+                  .filter((a) => (appStatusFilter === "all"
+                        ? true
+                        : appStatusFilter === "pending"
+                        ? a.status === "pending" ||
+                          a.status === "under_review" ||
+                          a.status === "rejected"
+                        : a.status === appStatusFilter))
                   .map((app) => {
                     const cleanPhone = app.phone
                       ? app.phone.replace(/[^0-9]/g, "").replace(/^0/, "254")
@@ -916,38 +1137,63 @@ export default function AdminPortalPage() {
                     return (
                       <div
                         key={app.id}
-                        className="bg-white rounded-[32px] p-6 sm:p-8 border border-forest-100 shadow-sm space-y-4"
+                        className="bg-white rounded-2xl p-6 border border-forest-100 space-y-4"
                       >
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-4 border-b border-forest-100">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-2 pb-4 border-b border-forest-100">
                           <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-serif text-xl font-bold text-forest-950">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-xl font-bold text-forest-950">
                                 {app.fullName}
                               </h4>
                               {app.brandName && (
-                                <span className="text-xs font-bold text-champagne-700 bg-cream-100 px-2.5 py-0.5 rounded-full">
+                                <span className="text-xs font-medium text-forest-700 bg-cream-100 px-2.5 py-0.5 rounded-full">
                                   {app.brandName}
                                 </span>
                               )}
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  app.userId
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-amber-50 text-amber-700"
+                                }`}
+                              >
+                                {app.userId ? "Account ready" : "No login yet"}
+                              </span>
                             </div>
-                            <p className="text-xs text-forest-600 mt-0.5">
-                              {app.experienceYears} Experience • {app.city} ({app.neighborhood})
+                            <p className="text-xs text-forest-600 mt-1">
+                              {app.experienceYears} experience · {app.city} (
+                              {app.neighborhood}) · {app.completeness?.percentage ?? 0}%
+                              profile
+                            </p>
+                            <p className="text-[11px] text-forest-500 mt-0.5">
+                              Applied{" "}
+                              {new Date(app.createdAt).toLocaleDateString("en-KE", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}
                             </p>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
-                                app.status === "approved"
-                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                  : app.status === "rejected"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-amber-100 text-amber-800 border border-amber-300"
-                              }`}
-                            >
-                              ● {app.status === "approved" ? "Approved & Live" : app.status}
-                            </span>
-                          </div>
+                          <span
+                            className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full shrink-0 ${
+                              app.status === "approved"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : app.status === "rejected"
+                                ? "bg-red-100 text-red-700"
+                                : app.status === "under_review"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            {app.status === "approved"
+                              ? "Approved"
+                              : app.status === "under_review"
+                              ? "Under review"
+                              : app.status === "rejected"
+                              ? "Declined"
+                              : "Pending"}
+                          </span>
                         </div>
 
                         <div className="space-y-2 text-xs">
@@ -970,25 +1216,61 @@ export default function AdminPortalPage() {
                             ))}
                           </div>
 
-                          {/* Vetting Credentials Checklist */}
-                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-forest-100/60">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-champagne-800 bg-champagne-100 px-2 py-0.5 rounded-full border border-champagne-300">
-                              🍳 Kitchen Tasting: {app.bio?.includes("Nairobi Test Kitchen Tasting: Agreed") ? "Agreed" : "Pending In-House Session"}
+                          {/* Verification facts captured at application time. */}
+                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-forest-100">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-forest-700 bg-cream-50 px-2 py-0.5 rounded-full border border-forest-100">
+                              ID:{" "}
+                              {app.nationalIdNumber
+                                ? `••••${String(app.nationalIdNumber).slice(-4)}`
+                                : "not provided"}
                             </span>
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                              app.bio?.includes("HACCP: Certified")
-                                ? "text-sky-800 bg-sky-100 border-sky-300"
-                                : "text-forest-700 bg-forest-50 border-forest-200"
-                            }`}>
-                              🛡️ HACCP: {app.bio?.includes("HACCP: Certified") ? "Certified" : "Standard"}
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                                app.meta?.vetting?.goodConduct
+                                  ? "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                  : "text-forest-600 bg-cream-50 border-forest-100"
+                              }`}
+                            >
+                              Good conduct:{" "}
+                              {app.meta?.vetting?.goodConduct ? "on file" : "pending"}
                             </span>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                              📜 Compliance: {app.bio?.includes("Compliance: Verified") ? "Verified" : "Checked"}
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                                app.meta?.vetting?.foodSafety
+                                  ? "text-emerald-800 bg-emerald-50 border-emerald-200"
+                                  : "text-forest-600 bg-cream-50 border-forest-100"
+                              }`}
+                            >
+                              Food safety:{" "}
+                              {app.meta?.vetting?.foodSafety ? "on file" : "pending"}
                             </span>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                              ✅ Food Safety: Verified
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-forest-700 bg-cream-50 px-2 py-0.5 rounded-full border border-forest-100">
+                              {app.meta?.vetting?.kitchenTasting
+                                ? "Tasting: agreed"
+                                : "Tasting: not agreed"}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-forest-700 bg-cream-50 px-2 py-0.5 rounded-full border border-forest-100">
+                              {app.meta?.vetting?.haccp ? "HACCP certified" : "HACCP: no"}
                             </span>
                           </div>
+
+                          {app.completeness?.missing?.length > 0 && (
+                            <div className="pt-2">
+                              <p className="text-[10px] font-medium text-forest-500 mb-1">
+                                Missing from profile
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {app.completeness.missing.map((item: string) => (
+                                  <span
+                                    key={item}
+                                    className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-medium"
+                                  >
+                                    {item}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         <div className="pt-4 border-t border-forest-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1023,38 +1305,64 @@ export default function AdminPortalPage() {
                             {app.status !== "approved" ? (
                               <>
                                 <button
-                                  onClick={() => handleUpdateAppStatus(app.id, "approved")}
-                                  className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider transition-all"
+                                  onClick={() => handleApproveApplication(app)}
+                                  disabled={actionLoadingId === app.id || !app.email}
+                                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-forest-950 hover:bg-forest-800 text-white font-bold text-xs disabled:opacity-50 transition-colors"
                                 >
-                                  Mark Approved
+                                  {actionLoadingId === app.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3.5 w-3.5" />
+                                  )}
+                                  Approve &amp; create login
                                 </button>
                                 <button
-                                  onClick={() => qualifyApplicant(app)}
-                                  className="px-4 py-2 rounded-xl bg-forest-900 hover:bg-forest-800 text-white font-bold text-xs uppercase tracking-wider shadow-md flex items-center gap-1.5 transition-all"
+                                  onClick={() => handleInviteApplicant(app)}
+                                  disabled={actionLoadingId === app.id || !app.email}
+                                  className="px-3 py-2 rounded-xl border border-forest-200 text-forest-800 font-medium text-xs hover:bg-cream-50 disabled:opacity-50 transition-colors"
                                 >
-                                  <Award className="h-3.5 w-3.5 text-champagne-400" />
-                                  <span>Qualify & List →</span>
+                                  Send invite
                                 </button>
-                                <button
-                                  onClick={() => handleUpdateAppStatus(app.id, "rejected")}
-                                  className="px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs border border-red-200 transition-all"
-                                >
-                                  Decline
-                                </button>
+                                {app.status !== "rejected" && (
+                                  <button
+                                    onClick={() =>
+                                      handleSetApplicationStatus(app.id, "rejected")
+                                    }
+                                    disabled={actionLoadingId === app.id}
+                                    className="px-3 py-2 rounded-xl bg-red-50 text-red-700 font-medium text-xs border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                                  >
+                                    Decline
+                                  </button>
+                                )}
+                                {app.status === "rejected" && (
+                                  <button
+                                    onClick={() =>
+                                      handleSetApplicationStatus(app.id, "pending")
+                                    }
+                                    disabled={actionLoadingId === app.id}
+                                    className="px-3 py-2 rounded-xl bg-cream-100 text-forest-800 font-medium text-xs hover:bg-cream-200 disabled:opacity-50 transition-colors"
+                                  >
+                                    Re-open application
+                                  </button>
+                                )}
                               </>
                             ) : (
                               <>
                                 <button
-                                  onClick={() => qualifyApplicant(app)}
-                                  className="px-3 py-2 rounded-xl bg-cream-100 hover:bg-cream-200 text-forest-900 font-bold text-xs border border-forest-200 transition-all"
+                                  onClick={() => handleInviteApplicant(app)}
+                                  disabled={actionLoadingId === app.id || !app.email}
+                                  className="px-3 py-2 rounded-xl border border-forest-200 text-forest-800 font-medium text-xs hover:bg-cream-50 disabled:opacity-50 transition-colors"
                                 >
-                                  Update Listing
+                                  Resend invite
                                 </button>
                                 <button
-                                  onClick={() => handleUpdateAppStatus(app.id, "pending")}
-                                  className="px-3 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs border border-gray-200 transition-all"
+                                  onClick={() =>
+                                    handleSetApplicationStatus(app.id, "pending")
+                                  }
+                                  disabled={actionLoadingId === app.id}
+                                  className="px-3 py-2 rounded-xl bg-cream-100 text-forest-700 font-medium text-xs hover:bg-cream-200 disabled:opacity-50 transition-colors"
                                 >
-                                  Revert to Pending
+                                  Revert to pending
                                 </button>
                               </>
                             )}
@@ -1067,7 +1375,7 @@ export default function AdminPortalPage() {
             ) : (
               <div className="bg-white rounded-3xl p-12 text-center border border-forest-100 space-y-2">
                 <ChefHat className="h-10 w-10 text-forest-400 mx-auto" />
-                <h3 className="font-serif text-lg font-bold text-forest-950">
+                <h3 className="font-sans text-lg font-bold text-forest-950">
                   No {appStatusFilter !== "all" ? appStatusFilter : ""} Applications
                 </h3>
                 <p className="text-xs text-forest-500">
@@ -1083,14 +1391,14 @@ export default function AdminPortalPage() {
         {/* TAB: UBER DISPATCH CONSOLE */}
         {activeTab === "dispatch" && (
           <div className="space-y-6 text-left">
-            <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-forest-100 shadow-sm space-y-6">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 border border-forest-100 shadow-sm space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-champagne-100 text-[10px] font-black uppercase tracking-wider text-forest-950 mb-2">
                     <Sparkles className="h-3.5 w-3.5 text-champagne-600" />
                     <span>Uber / Gwiji Dispatch Console</span>
                   </div>
-                  <h3 className="font-serif text-2xl sm:text-3xl font-bold text-forest-950">
+                  <h3 className="font-sans text-2xl sm:text-3xl font-bold text-forest-950">
                     Live Chef Matching & Dispatch
                   </h3>
                   <p className="text-xs text-forest-600 mt-1">
@@ -1163,7 +1471,7 @@ export default function AdminPortalPage() {
                       );
 
                       const clientWaMsg = encodeURIComponent(
-                        `Hi ${b.clientName}! This is Book A Chef Concierge. We have matched you with ${b.chefName || "your certified chef"} for your event on ${b.bookingDate}. View live status: https://bookachef.co.ke/request/status?ref=${b.id}`
+                        `Hi ${b.clientName}! This is Book A Chef Concierge. We have matched you with ${b.chefName || "your certified chef"} for your event on ${b.bookingDate}. View live status: https://bookachef.co.ke/request/status?id=${b.id}`
                       );
 
                       return (
@@ -1255,10 +1563,11 @@ export default function AdminPortalPage() {
                                 }
                                 className="bg-white border border-forest-200 rounded-xl px-3 py-2 text-xs font-bold text-forest-950 focus:outline-none focus:border-forest-900 flex-1 max-w-xs"
                               >
-                                <option value="">Select Certified Chef to Match...</option>
+                                <option value="">Select a chef with a login…</option>
                                 {chefs.map((c) => (
-                                  <option key={c.id} value={c.id}>
+                                  <option key={c.id} value={c.id} disabled={!c.userId}>
                                     {c.name} ({c.cuisines?.slice(0, 2).join(", ")})
+                                    {c.userId ? "" : " — no login"}
                                   </option>
                                 ))}
                               </select>
@@ -1331,7 +1640,7 @@ export default function AdminPortalPage() {
               ) : (
                 <div className="bg-cream-50 rounded-3xl p-12 text-center border border-forest-100 space-y-2">
                   <Sparkles className="h-10 w-10 text-champagne-500 mx-auto" />
-                  <h3 className="font-serif text-lg font-bold text-forest-950">
+                  <h3 className="font-sans text-lg font-bold text-forest-950">
                     No Inbound Requests
                   </h3>
                   <p className="text-xs text-forest-600">
@@ -1345,8 +1654,8 @@ export default function AdminPortalPage() {
 
         {/* TAB 4: ALL BOOKINGS */}
         {activeTab === "bookings" && (
-          <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-forest-100 shadow-sm text-left space-y-6">
-            <h3 className="font-serif text-2xl font-bold text-forest-950">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-forest-100 shadow-sm text-left space-y-6">
+            <h3 className="font-sans text-2xl font-bold text-forest-950">
               Master Platform Bookings
             </h3>
             {bookings.length > 0 ? (
@@ -1392,7 +1701,7 @@ export default function AdminPortalPage() {
       {/* ADMIN LISTING MODAL: CREATE / PUBLISH CERTIFIED CHEF */}
       {isListingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-forest-950/80 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="relative bg-white rounded-[36px] max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 sm:p-10 space-y-6 border border-forest-100 text-left">
+          <div className="relative bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 sm:p-10 space-y-6 border border-forest-100 text-left">
             <button
               onClick={() => setIsListingModalOpen(false)}
               className="absolute top-6 right-6 h-9 w-9 rounded-full bg-forest-50 hover:bg-forest-100 text-forest-900 flex items-center justify-center"
@@ -1404,11 +1713,13 @@ export default function AdminPortalPage() {
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cream-100 text-[10px] font-black uppercase tracking-widest text-champagne-700">
                 <Award className="h-3.5 w-3.5" /> Book A Chef Official Certification
               </div>
-              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-forest-950">
-                List New Certified Private Chef
+              <h2 className="font-sans text-2xl sm:text-3xl font-bold text-forest-950">
+                Add a chef manually
               </h2>
               <p className="text-xs text-forest-600">
-                Attach official Book A Chef uniform portrait, verified dish imagery, and tasting certification notes.
+                Creates the login account, the marketplace listing, and a first
+                menu in one step. The chef stays offline until they sign in and
+                finish their own profile.
               </p>
             </div>
 
@@ -1423,7 +1734,34 @@ export default function AdminPortalPage() {
                     placeholder="e.g. Chef Brian Mutua"
                     value={chefName}
                     onChange={(e) => setChefName(e.target.value)}
-                    className="w-full bg-cream-50 border border-forest-100 rounded-2xl p-3 font-bold text-forest-950 outline-none"
+                    className="w-full bg-cream-50 border border-forest-100 rounded-xl p-3 font-medium text-forest-950 outline-none focus:border-forest-950"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Email for login *</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="chef@example.com"
+                    value={chefEmail}
+                    onChange={(e) => setChefEmail(e.target.value)}
+                    className="w-full bg-cream-50 border border-forest-100 rounded-xl p-3 font-medium text-forest-950 outline-none focus:border-forest-950"
+                  />
+                  <p className="text-[10px] text-forest-500">
+                    Creates their account. They set a password through the invite.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-forest-950">Phone / WhatsApp *</label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="0712 345 678"
+                    value={chefPhone}
+                    onChange={(e) => setChefPhone(e.target.value)}
+                    className="w-full bg-cream-50 border border-forest-100 rounded-xl p-3 font-medium text-forest-950 outline-none focus:border-forest-950"
                   />
                 </div>
 
@@ -1434,7 +1772,7 @@ export default function AdminPortalPage() {
                     placeholder="e.g. Atelier Mutua"
                     value={brandName}
                     onChange={(e) => setBrandName(e.target.value)}
-                    className="w-full bg-cream-50 border border-forest-100 rounded-2xl p-3 font-bold text-forest-950 outline-none"
+                    className="w-full bg-cream-50 border border-forest-100 rounded-xl p-3 font-medium text-forest-950 outline-none focus:border-forest-950"
                   />
                 </div>
               </div>
@@ -1672,7 +2010,7 @@ export default function AdminPortalPage() {
                   disabled={submittingChef}
                   className="px-8 py-3.5 rounded-2xl bg-forest-900 text-cream-50 font-black text-xs uppercase tracking-widest hover:bg-forest-800 shadow-xl flex items-center gap-2"
                 >
-                  {submittingChef ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publish Certified Chef to Live Marketplace ✓"}
+                  {submittingChef ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account & listing ✓"}
                 </button>
               </div>
             </form>

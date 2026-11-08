@@ -2,7 +2,7 @@
 
 ## Project
 
-Book A Chef Kenya — an on-demand private chef dispatch platform (Uber/Gwiji model). Customers submit a minimal request (date, time, location, cuisine, guests, budget) and the system automatically matches them with an available chef. No public chef profiles or browsing.
+Book A Chef Kenya — a private chef marketplace. Customers can **browse verified chefs**, view public profiles (menus, reviews, availability), and **book directly** — or submit a request and let the dispatch engine match them. Both flows coexist.
 
 ## Commands
 
@@ -20,7 +20,7 @@ No test suite, no CI, no pre-commit hooks.
 1. Copy `.env.example` to `.env.local` and fill in Supabase URL + anon key.
 2. `SUPABASE_SERVICE_ROLE_KEY` is server-side only — never expose to client.
 3. M-Pesa and Resend are optional; the app degrades gracefully without them.
-4. Run schema migrations in order: `schema.sql` → `uber_dispatch_schema.sql` → `dispatch_log.sql` → `concierge_inquiries_rls.sql`.
+4. Run schema migrations in order: `schema.sql` → `uber_dispatch_schema.sql` → `dispatch_log.sql` → `concierge_inquiries_rls.sql` → `marketplace_schema.sql`.
 
 ## Design System (Airbnb-style)
 
@@ -35,18 +35,16 @@ No test suite, no CI, no pre-commit hooks.
 ## Architecture
 
 - **Auth**: Supabase Auth. Roles (`client`, `chef`, `admin`) in `profiles` table. `middleware.ts` guards `/admin`, `/chef-dashboard`, `/dashboard`, `/login`.
-- **Booking flow**: Customer must be signed in (Gwiji-style auth guard) → submits `/request` form → `POST /api/bookings/create` creates booking with `status: pending_assignment` → `matchChefToBooking()` in `utils/dispatch.ts` auto-assigns best-matching chef → chef accepts via `POST /api/bookings/[id]/accept` → client pays via M-Pesa escrow.
-- **No restaurant partnerships**: This is a pure independent-chef dispatch platform. No restaurant onboarding, no restaurant profiles, no "Become a Chef" flow.
-- **Uber-style dispatch**: Chefs are paired with requests automatically. Customer never selects a chef — they submit requirements and the system matches.
-- **WhatsApp notifications**: Timely WhatsApp updates must be sent when: booking is created, chef is assigned, chef accepts, payment is received, and booking status changes. Use the WhatsApp Business API or wa.me links for handoff.
-- **Home page**: No "For Diners & Hosts" or "For Restaurants" sections. Single CTA: "Request a Chef" → sign-in → booking form.
+- **Marketplace flow (direct booking)**: Customer browses `/chefs` → views `/chefs/[slug]` → clicks "Book this chef" → `/book/[slug]` → picks menu, date, time, guests → `POST /api/bookings/create` with `chef_id` + `menu_id` → booking created as `assigned` → chef accepts via `POST /api/bookings/[id]/accept` → client pays via M-Pesa escrow.
+- **Dispatch flow (request matching)**: Customer submits `/request` form → `POST /api/bookings/create` creates booking with `status: pending_assignment` → `matchChefToBooking()` in `utils/dispatch.ts` auto-assigns best-matching chef → chef accepts → client pays. Both flows share the same booking lifecycle.
+- **Chef profiles**: `/chefs/[slug]` is a public, server-rendered page. Only verified chefs are addressable. The chef's slug is generated at listing creation (`utils/marketplace.ts` → `slugify`).
+- **Favourites**: Clients can save chefs via `chef_favorites` (see `marketplace_schema.sql`). Toggle at `POST /api/chefs/[slug]/favorite`.
+- **WhatsApp notifications**: Sent when: booking is created, chef is assigned, chef accepts, payment is received, and booking status changes. Use the WhatsApp Business API or wa.me links for handoff.
 - **Dispatch matching**: `utils/dispatch.ts` scores chefs by cuisine match (40pts), location (30pts), budget fit (20pts), rating (10pts), availability (10pts). Called fire-and-forget from `bookings/create`.
-- **Chef claiming**: Chefs can claim unassigned `pending_assignment` bookings via the accept endpoint (RLS allows `UPDATE` where `status = 'pending_assignment' AND chef_id IS NULL`).
 - **Re-matching**: If a chef declines an unassigned booking, status resets to `pending_assignment` and matching re-triggers.
-- **WhatsApp handoff**: `bookings/create` returns a `wa.me` link. `bookings/[id]/accept` also returns a `wa.me` link for the client to confirm with the chef.
 - **Status polling**: `/request/status` page polls `GET /api/dispatch/status?booking_id=xxx` every 5s.
 - **Supabase clients**: `utils/supabase/server.ts` for server components/API routes; `utils/supabase/client.ts` for client components. Both have hardcoded fallback URL/anon key.
-- **Database**: `supabase/schema.sql` is the base schema. `uber_dispatch_schema.sql` makes `chef_id` nullable and adds dispatch columns. `dispatch_log.sql` creates the dispatch tracking table. `concierge_inquiries_rls.sql` holds RLS policies.
+- **Database**: `supabase/schema.sql` is the base schema. `uber_dispatch_schema.sql` makes `chef_id` nullable and adds dispatch columns. `dispatch_log.sql` creates the dispatch tracking table. `concierge_inquiries_rls.sql` holds RLS policies. `marketplace_schema.sql` adds `chef_favorites` and marketplace indexes.
 - **Chef catalog**: `utils/data.ts` exports `INITIAL_CHEFS` — a local fallback used when a DB lookup fails. Don't remove it.
 
 ## Gotchas

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -18,12 +18,13 @@ import {
   Home,
   Truck,
   Receipt,
+  BadgeCheck,
   Heart,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { MarketplaceChef, formatPrice } from "@/utils/marketplace";
+import { createClient } from "@/utils/supabase/client";
 
 const CUISINE_CATEGORIES = [
   { id: "all", label: "All", icon: "✨" },
@@ -91,19 +92,19 @@ const DINING_EXPERIENCES = [
 const HOW_IT_WORKS = [
   {
     step: "01",
-    title: "Tell Us Your Event",
-    desc: "Date, location, cuisine, guests, budget. That's it — no browsing, no decisions.",
-    icon: <Calendar className="h-5 w-5" />,
+    title: "Browse or request",
+    desc: "Browse verified chefs and their menus, or tell us what you need and we'll match you.",
+    icon: <Search className="h-5 w-5" />,
   },
   {
     step: "02",
-    title: "We Match & Dispatch",
-    desc: "Our system finds the best available chef for your criteria and assigns them instantly.",
-    icon: <ChefHat className="h-5 w-5" />,
+    title: "Book & confirm",
+    desc: "Pick your chef, menu, and date. The chef confirms — then pay securely via M-Pesa.",
+    icon: <Calendar className="h-5 w-5" />,
   },
   {
     step: "03",
-    title: "Chef Arrives & Cooks",
+    title: "Chef arrives & cooks",
     desc: "Your chef shows up with fresh ingredients, cooks course-by-course, and cleans up.",
     icon: <Sparkles className="h-5 w-5" />,
   },
@@ -132,6 +133,64 @@ export default function HomePage() {
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
   const [guests, setGuests] = useState(4);
+  const [featuredChefs, setFeaturedChefs] = useState<MarketplaceChef[]>([]);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function loadFeatured() {
+      try {
+        const res = await fetch("/api/chefs?featured=true&limit=6");
+        const data = await res.json();
+        if (res.ok) setFeaturedChefs(data.chefs || []);
+      } catch {
+        // Silent — the section just won't render.
+      }
+    }
+    loadFeatured();
+  }, []);
+
+  useEffect(() => {
+    async function loadFavorites() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("chef_favorites")
+        .select("chef_id")
+        .eq("client_id", user.id);
+      if (data) setFavorites(new Set(data.map((f: any) => f.chef_id)));
+    }
+    loadFavorites();
+  }, [supabase]);
+
+  const toggleFavorite = async (chef: MarketplaceChef) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const isFav = favorites.has(chef.id);
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (isFav) next.delete(chef.id);
+      else next.add(chef.id);
+      return next;
+    });
+
+    try {
+      await fetch(`/api/chefs/${chef.slug}/favorite`, { method: "POST" });
+    } catch {
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        if (isFav) next.add(chef.id);
+        else next.delete(chef.id);
+        return next;
+      });
+    }
+  };
 
   const minDate = new Date();
   minDate.setDate(minDate.getDate() + 2);
@@ -154,13 +213,14 @@ export default function HomePage() {
         </div>
 
         <div className="relative max-w-3xl mx-auto px-4 text-center">
-          <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
+          <h1 className="font-sans text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
             A private chef,
             <br />
             <span className="text-champagne-400">at your table.</span>
           </h1>
           <p className="mt-4 text-base sm:text-lg text-cream-200/80 max-w-xl mx-auto leading-relaxed">
-            Tell us what you need. We dispatch a certified chef to your kitchen.
+            Browse verified chefs and book directly — or tell us what you need
+            and we&apos;ll match you.
           </p>
 
           {/* Search Bar — Airbnb style */}
@@ -244,11 +304,8 @@ export default function HomePage() {
       {/* ── CATEGORY PILLS ── */}
       <section className="sticky top-16 z-30 bg-white/95 backdrop-blur-md border-b border-forest-100/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Scrolls horizontally on mobile, wraps and centres from md up so
-              pills never break flex alignment on short desktop viewports. */}
           <div
-            className="flex items-center gap-2 py-3 overflow-x-auto no-scrollbar
-                       md:flex-wrap md:justify-center md:overflow-visible"
+            className="flex items-center gap-2 py-3 overflow-x-auto no-scrollbar md:flex-wrap md:justify-center md:overflow-visible"
             role="tablist"
             aria-label="Cuisine categories"
           >
@@ -261,19 +318,13 @@ export default function HomePage() {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`inline-flex shrink-0 items-center justify-center gap-2
-                              px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap
-                              transition-colors duration-200 focus-visible:ring-2
-                              focus-visible:ring-forest-950 focus-visible:ring-offset-2
-                              focus-visible:outline-none ${
-                                isActive
-                                  ? "bg-forest-950 text-white shadow-sm"
-                                  : "bg-cream-100 text-forest-700 hover:bg-cream-200"
-                              }`}
+                  className={`inline-flex shrink-0 items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 focus-visible:outline-none ${
+                    isActive
+                      ? "bg-forest-950 text-white shadow-sm"
+                      : "bg-cream-100 text-forest-700 hover:bg-cream-200"
+                  }`}
                 >
-                  <span aria-hidden="true" className="leading-none">
-                    {cat.icon}
-                  </span>
+                  <span aria-hidden="true" className="leading-none">{cat.icon}</span>
                   <span className="leading-none">{cat.label}</span>
                 </button>
               );
@@ -282,14 +333,138 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── FEATURED CHEFS ── */}
+      {featuredChefs.length > 0 && (
+        <section className="py-16 sm:py-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                  Marketplace
+                </p>
+                <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                  Featured chefs
+                </h2>
+              </div>
+              <Link
+                href="/chefs"
+                className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-forest-950 hover:text-forest-700 transition-colors"
+              >
+                Browse all
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {featuredChefs.map((chef) => (
+                <Link
+                  key={chef.id}
+                  href={`/chefs/${chef.slug}`}
+                  className="group block"
+                >
+                  <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-cream-100">
+                    <Image
+                      src={chef.cover_image_url || chef.avatar_url}
+                      alt={chef.name}
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-forest-950/35 via-transparent to-transparent" />
+                    {chef.is_available && (
+                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-sm">
+                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                        Available
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toggleFavorite(chef);
+                      }}
+                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-colors shadow-sm"
+                      aria-label="Save chef"
+                    >
+                      <Heart
+                        className={`h-4 w-4 ${
+                          favorites.has(chef.id)
+                            ? "fill-red-500 text-red-500"
+                            : "text-forest-600"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <div className="mt-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <h3 className="font-bold text-forest-950 truncate">
+                            {chef.name}
+                          </h3>
+                          {chef.verified && (
+                            <BadgeCheck className="h-4 w-4 text-forest-600 shrink-0" />
+                          )}
+                        </div>
+                        {chef.brand_name && (
+                          <p className="text-xs text-forest-500 truncate">
+                            {chef.brand_name}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Star className="h-3.5 w-3.5 text-champagne-500 fill-current" />
+                        <span className="text-sm font-semibold text-forest-950">
+                          {Number(chef.rating || 0).toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {chef.cuisines?.slice(0, 3).map((c) => (
+                        <span
+                          key={c}
+                          className="px-2 py-0.5 rounded-full bg-cream-100 text-forest-700 text-[10px] font-medium"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between mt-2.5">
+                      <span className="text-xs text-forest-500 flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {chef.city}
+                      </span>
+                      <span className="text-sm font-bold text-forest-950">
+                        {formatPrice(chef.price_per_guest)}
+                        <span className="text-[10px] font-normal text-forest-400"> /guest</span>
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            <div className="mt-8 text-center sm:hidden">
+              <Link
+                href="/chefs"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-forest-950"
+              >
+                Browse all chefs
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ── HOW IT WORKS ── */}
-      <section className="py-16 sm:py-20">
+      <section className="py-16 sm:py-20 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
               How it works
             </p>
-            <h2 className="font-serif text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+            <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
               Three steps to dinner
             </h2>
           </div>
@@ -298,19 +473,17 @@ export default function HomePage() {
             {HOW_IT_WORKS.map((item) => (
               <div
                 key={item.step}
-                className="group flex flex-col h-full bg-cream-50 rounded-2xl p-6 border border-forest-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+                className="group flex flex-col h-full bg-white rounded-2xl p-6 border border-forest-100/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
               >
                 <div className="flex items-center justify-between mb-4 shrink-0">
-                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-forest-700 shadow-sm border border-forest-100">
+                  <div className="w-10 h-10 rounded-xl bg-cream-50 flex items-center justify-center text-forest-700 shadow-sm border border-forest-100">
                     {item.icon}
                   </div>
-                  <span className="font-serif text-2xl font-bold leading-none text-champagne-500/40">
+                  <span className="font-sans text-2xl font-bold leading-none text-champagne-500/40">
                     {item.step}
                   </span>
                 </div>
-                {/* mt-auto pins the text block to the card floor so titles and
-                    copy align across cards regardless of copy length. */}
-                <h3 className="font-serif text-lg font-bold leading-snug text-forest-950 mb-1.5 mt-auto">
+                <h3 className="font-sans text-lg font-bold leading-snug text-forest-950 mb-1.5 mt-auto">
                   {item.title}
                 </h3>
                 <p className="text-sm text-forest-600 leading-relaxed">
@@ -323,13 +496,13 @@ export default function HomePage() {
       </section>
 
       {/* ── TRUST FEATURES ── */}
-      <section className="py-16 sm:py-20 bg-cream-50">
+      <section className="py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
               Why Book A Chef
             </p>
-            <h2 className="font-serif text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+            <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
               Built on trust
             </h2>
           </div>
@@ -337,7 +510,7 @@ export default function HomePage() {
           <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-8">
             {TRUST_FEATURES.map((feature) => (
               <div key={feature.title} className="flex gap-4">
-                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm border border-forest-100">
+                <div className="w-10 h-10 rounded-xl bg-cream-50 flex items-center justify-center shrink-0 shadow-sm border border-forest-100">
                   {feature.icon}
                 </div>
                 <div>
@@ -351,14 +524,14 @@ export default function HomePage() {
       </section>
 
       {/* ── SERVICE TYPES ── */}
-      <section className="py-16 sm:py-20">
+      <section className="py-16 sm:py-20 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-8">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
                 Experiences
               </p>
-              <h2 className="font-serif text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+              <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
                 Ways to dine
               </h2>
             </div>
@@ -368,7 +541,7 @@ export default function HomePage() {
             {DINING_EXPERIENCES.map((item) => (
               <Link
                 key={item.name}
-                href="/request"
+                href="/chefs"
                 className="group relative flex flex-col h-full overflow-hidden rounded-2xl border border-forest-100/60 bg-white hover:shadow-lg hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 transition-all duration-300"
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-cream-100 shrink-0">
@@ -379,10 +552,7 @@ export default function HomePage() {
                     sizes="(max-width: 768px) 50vw, 25vw"
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
-                  <div
-                    className="absolute inset-0 bg-gradient-to-t from-forest-950/45 via-transparent to-transparent"
-                    aria-hidden="true"
-                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-forest-950/45 via-transparent to-transparent" />
                 </div>
                 <div className="p-4 flex flex-col flex-1">
                   <h3 className="font-bold text-sm text-forest-950 group-hover:text-champagne-600 transition-colors">
@@ -397,21 +567,17 @@ export default function HomePage() {
       </section>
 
       {/* ── DESTINATIONS ── */}
-      {/* Generous bottom padding keeps clear separation from the dark CTA
-          block below it on every breakpoint. */}
-      <section className="pt-16 pb-24 sm:pt-20 sm:pb-28 bg-cream-50">
+      <section className="pt-16 pb-24 sm:pt-20 sm:pb-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mb-8">
             <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
               Where we operate
             </p>
-            <h2 className="font-serif text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+            <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
               Chefs across Kenya
             </h2>
           </div>
 
-          {/* items-stretch + h-full keep every card the same height so the
-              grid never collapses or spills into the CTA below. */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 items-stretch">
             {[
               { name: "Westlands", area: "Nairobi" },
@@ -425,8 +591,8 @@ export default function HomePage() {
             ].map((loc) => (
               <Link
                 key={loc.name}
-                href={`/request?location=${encodeURIComponent(loc.name)}`}
-                className="group flex items-center gap-3 h-full p-4 rounded-xl bg-white border border-forest-100/60 hover:shadow-md hover:border-forest-200 focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 transition-all"
+                href={`/chefs?location=${encodeURIComponent(loc.name)}`}
+                className="group flex items-center gap-3 h-full p-4 rounded-xl bg-white border border-forest-100/60 hover:shadow-md hover:border-forest-200 transition-all"
               >
                 <div className="w-10 h-10 shrink-0 rounded-lg bg-cream-100 flex items-center justify-center text-forest-600 group-hover:bg-champagne-100 group-hover:text-champagne-600 transition-colors">
                   <MapPin className="h-4 w-4" />
@@ -451,19 +617,25 @@ export default function HomePage() {
             <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl" />
 
             <div className="relative max-w-2xl mx-auto">
-              <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight">
+              <h2 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight">
                 Your kitchen is the best restaurant in town
               </h2>
               <p className="mt-4 text-cream-200/70 text-base sm:text-lg leading-relaxed">
-                Let a certified chef prove it. Request in 30 seconds, get matched in minutes.
+                Browse verified chefs, pick your favourite, and book in minutes.
               </p>
-              <div className="mt-8">
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link
-                  href="/request"
+                  href="/chefs"
                   className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-champagne-500 hover:bg-champagne-600 text-white font-bold text-sm uppercase tracking-wider shadow-xl transition-all hover:scale-105 active:scale-95"
                 >
                   <ChefHat className="h-5 w-5" />
-                  <span>Request a Chef</span>
+                  Browse chefs
+                </Link>
+                <Link
+                  href="/request"
+                  className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/25 text-white font-bold text-sm uppercase tracking-wider hover:bg-white/10 transition-all"
+                >
+                  Request a chef
                 </Link>
               </div>
             </div>

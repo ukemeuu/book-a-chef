@@ -495,10 +495,164 @@
 
 ---
 
-### 11. Chefs Redirect (`/chefs`)
+### 11. Chefs Marketplace (`/chefs`)
 
-- **Behavior:** Server-side redirect to `/request`
-- **Code:** `redirect("/request")`
+**Layout:** Full-width grid, max-width 7xl container
+
+**Background:** cream-50
+
+#### 11.1 Header
+- Badge: "Marketplace" (champagne-600)
+- H1: "Browse chefs"
+- Subtext: "Discover verified private chefs across Kenya..."
+
+#### 11.2 Filter Bar
+- Search input (name, brand, specialty)
+- Cuisine dropdown (14 options)
+- Location dropdown (10 options)
+- Price band dropdown (4 bands)
+- "Available now" checkbox
+- Sort dropdown (top rated, most reviewed, price asc/desc, newest)
+- Clear filters button
+- Result count
+
+#### 11.3 Chef Card Grid
+- 3-column grid (lg), 2-column (sm), 1-column (mobile)
+- **Card:**
+  - Cover image (4:3, rounded-2xl, hover zoom)
+  - Availability badge (emerald-500, top-left)
+  - Favourite heart (top-right, white circle)
+  - Name + verified badge
+  - Brand name
+  - Rating (star + value + count)
+  - Cuisine pills (max 3)
+  - Location + price per guest
+- **Empty state:** illustration + "No chefs match your filters" + clear button
+
+#### 11.4 Bottom CTA
+- Dark banner: "Can't find the right chef?" → "Request a chef" CTA
+
+---
+
+### 12. Chef Profile (`/chefs/[slug]`)
+
+**Layout:** Single column, max-width 5xl container
+
+**Background:** cream-50
+
+#### 12.1 Cover
+- 21:9 aspect ratio, rounded-2xl
+- Gradient overlay
+
+#### 12.2 Header Card
+- Avatar (24x24, rounded-2xl, -mt-16 overlap)
+- Name + verified badge
+- Brand name
+- Tagline
+- Stats row: rating, location, experience, availability
+- Actions: share (copies link), favourite heart
+
+#### 12.3 Booking CTA Banner
+- Dark forest-950 background
+- Chef name + price per guest
+- Guest range + service formats
+- "Book this chef" button (champagne-400)
+
+#### 12.4 About
+- Bio text
+- Culinary philosophy (blockquote with champagne border)
+
+#### 12.5 Details
+- Cuisines, dietary, service areas
+- Service formats (in-home / delivery)
+- Notice required, guest range
+
+#### 12.6 Gallery
+- 3-column grid of square images
+
+#### 12.7 Menus
+- 2-column grid of menu cards
+- Each: tag, title, description, price, expandable courses
+
+#### 12.8 Availability
+- Weekly working days (7 pills, forest-950 when working)
+- Working hours + max bookings/day
+- Blocked dates (red pills)
+- Already booked dates (amber pills)
+
+#### 12.9 Reviews
+- 2-column grid of review cards
+- Each: avatar initial, name, verified badge, time ago, occasion, stars, comment
+
+#### 12.10 Trust Section
+- 3-column grid: Verified chef, Escrow payment, Direct contact
+
+#### 12.11 Sticky Mobile CTA
+- Fixed bottom bar with "Book {name}" button (sm:hidden)
+
+---
+
+### 13. Book Chef (`/book/[slug]`)
+
+**Layout:** Single column, max-width 3xl container
+
+**Background:** cream-50
+
+#### 13.1 Header
+- Back link to chef profile
+- Chef avatar + name + verified badge
+- Cuisines + location
+
+#### 13.2 Step 1: Choose a Menu
+- Radio-style menu cards
+- Selected state: forest-950 border + forest-50 background
+- Price per guest
+
+#### 13.3 Step 2: Pick a Date & Time
+- Date input (min = today + 2, max = +120 days)
+- Time slot select (6 options)
+- Disabled dates: blocked, busy, outside working days
+- Availability hint text
+
+#### 13.4 Step 3: Guests & Format
+- Guest stepper (min/max from chef)
+- Service format toggle (in-home / delivery)
+- Location input
+
+#### 13.5 Step 4: Occasion & Preferences
+- Occasion multi-select (7 options, 3-column grid)
+- Dietary requirements input
+- Special requests textarea
+
+#### 13.6 Step 5: Your Details
+- Full name, WhatsApp number, email
+- Prefilled from profile
+
+#### 13.7 Price Summary
+- Dark forest-950 background
+- Menu × guests, platform fee included, total
+- Grocery note
+
+#### 13.8 Submit
+- "Send booking request" button (forest-950, full width)
+- Terms link
+- Reassurance points (escrow, refund)
+
+#### 13.9 Success State
+- Checkmark icon, "Booking request sent!"
+- Reference number
+- "Track my booking" + "Browse more chefs" CTAs
+
+---
+
+### 14. Dashboard (`/dashboard`)
+
+**Tabs:** Bookings | Messages | Favourites
+
+#### 14.1 Favourites Tab
+- 3-column grid of saved chef cards
+- Each: cover, name, rating, cuisines, location, price
+- Empty state: heart icon + "No favourites yet" + browse CTA
 
 ---
 

@@ -47,12 +47,13 @@ export async function POST(request: NextRequest) {
     const supabase = getServiceClient();
 
     // ── Idempotency check ──────────────────────────────────────────────────
-    // If we already processed this callback, skip (prevents double-confirmation)
+    // Look the payment up to learn which booking it belongs to. `.maybeSingle`
+    // avoids turning "no row" into a thrown error.
     const { data: existingPayment } = await supabase
       .from("payments")
       .select("id, callback_processed, booking_id")
       .eq("mpesa_checkout_request_id", checkoutRequestId)
-      .single();
+      .maybeSingle();
 
     if (!existingPayment) {
       console.warn("[mpesa/callback] No payment record for CheckoutRequestID:", checkoutRequestId);
@@ -61,6 +62,26 @@ export async function POST(request: NextRequest) {
 
     if (existingPayment.callback_processed) {
       console.log("[mpesa/callback] Already processed:", checkoutRequestId);
+      return NextResponse.json({ ResultCode: 0, ResultDesc: "Accepted" }, { status: 200 });
+    }
+
+    // Safaricom retries, and retries can overlap. A read-then-write check lets
+    // two requests both pass the guard above and confirm the booking twice.
+    // Claim the row atomically first: only the request that flips
+    // callback_processed false → true is allowed to apply side effects.
+    const { data: claimed, error: claimError } = await supabase
+      .from("payments")
+      .update({
+        callback_processed: true,
+        callback_received_at: new Date().toISOString(),
+      })
+      .eq("id", existingPayment.id)
+      .eq("callback_processed", false)
+      .select("id")
+      .maybeSingle();
+
+    if (claimError || !claimed) {
+      console.log("[mpesa/callback] Already claimed by another request:", checkoutRequestId);
       return NextResponse.json({ ResultCode: 0, ResultDesc: "Accepted" }, { status: 200 });
     }
 
@@ -80,7 +101,7 @@ export async function POST(request: NextRequest) {
         .eq("mpesa_checkout_request_id", checkoutRequestId);
 
       // Update booking status to CONFIRMED and mark deposit paid
-      await supabase
+      const { error: bookingError } = await supabase
         .from("bookings")
         .update({
           status: "confirmed",
@@ -89,12 +110,19 @@ export async function POST(request: NextRequest) {
         })
         .eq("id", existingPayment.booking_id);
 
+      if (bookingError) {
+        console.error(
+          "[mpesa/callback] Payment recorded but booking confirmation failed:",
+          bookingError.message
+        );
+      }
+
       // Create notification for client
       const { data: booking } = await supabase
         .from("bookings")
         .select("client_id, client_name, client_phone, chef_id, booking_date, chefs(name)")
         .eq("id", existingPayment.booking_id)
-        .single();
+        .maybeSingle();
 
       if (booking?.client_id) {
         await supabase.from("notifications").insert([
@@ -165,11 +193,14 @@ export async function POST(request: NextRequest) {
         })
         .eq("mpesa_checkout_request_id", checkoutRequestId);
 
-      // Revert booking to chef_accepted (awaiting retry)
+      // Revert booking to chef_accepted (awaiting retry) — but only if it is
+      // still in the payment stage. Without the guard a late failure callback
+      // could reopen a booking that was completed or cancelled in the meantime.
       await supabase
         .from("bookings")
         .update({ status: "chef_accepted" })
-        .eq("id", existingPayment.booking_id);
+        .eq("id", existingPayment.booking_id)
+        .eq("status", "payment_pending");
 
       console.log("[mpesa/callback] Payment failed:", callback.resultDesc);
     }

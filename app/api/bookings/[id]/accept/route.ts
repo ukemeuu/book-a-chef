@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { notifyChefAccepted, buildHandoffLink } from "@/utils/whatsapp-notify";
+import { runWithSchemaFallback, safeDispatchLog } from "@/utils/schemaFallback";
 
 export async function POST(
   request: NextRequest,
@@ -38,12 +39,17 @@ export async function POST(
     // previously also let any chef claim an unassigned `pending_assignment`
     // booking by ID, which (a) leaked client PII to whoever guessed the ID and
     // (b) bypassed the sequential one-chef-at-a-time matching rule.
-    const isAssignedChef = booking.chefs?.user_id === user.id;
+    //
+    // The embedded `chefs` relation can arrive as an object or a single-element
+    // array depending on PostgREST's relationship detection; normalise it or the
+    // assigned chef is wrongly rejected.
+    const chefJoin = Array.isArray(booking.chefs) ? booking.chefs[0] : booking.chefs;
+    const isAssignedChef = !!chefJoin?.user_id && chefJoin.user_id === user.id;
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     const isAdmin = profile?.role === "admin";
 
@@ -93,15 +99,20 @@ export async function POST(
     // having been applied. claim_booking() adds the further DB-side layers
     // (trigger + partial unique index); this is the app-level guard.
     const expectedStatus = booking.status;
-    const { data: updated, error: updateErr } = await supabase
-      .from("bookings")
-      .update({
+    const { data: updated, error: updateErr } = await runWithSchemaFallback(
+      {
         status: "chef_accepted",
         chef_response_at: new Date().toISOString(),
-      })
-      .eq("id", bookingId)
-      .eq("status", expectedStatus)
-      .select("id");
+      },
+      (payload) =>
+        supabase
+          .from("bookings")
+          .update(payload)
+          .eq("id", bookingId)
+          .eq("status", expectedStatus)
+          .eq("chef_id", booking.chef_id)
+          .select("id")
+    );
 
     if (updateErr) {
       return NextResponse.json({ error: "Failed to update booking status." }, { status: 500 });
@@ -115,18 +126,17 @@ export async function POST(
       );
     }
 
-    // 6. Record the acceptance in the dispatch log.
-    await supabase.from("dispatch_log").insert([
-      {
-        booking_id: bookingId,
-        chef_id: booking.chef_id,
-        auto_assigned: true,
-        accepted_at: new Date().toISOString(),
-      },
-    ]);
+    // 6. Record the acceptance in the dispatch log (non-fatal: the table is
+    //    absent on the current live project).
+    await safeDispatchLog(supabase, {
+      booking_id: bookingId,
+      chef_id: booking.chef_id,
+      event: "accepted",
+      reason: "Chef accepted the dispatched offer",
+    });
 
     // 7. Notify client (in-app)
-    const chefName = booking.chefs?.name || "A chef";
+    const chefName = chefJoin?.name || "A chef";
     if (booking.client_id) {
       await supabase.from("notifications").insert([
         {
@@ -157,7 +167,7 @@ export async function POST(
       {
         chefName,
         date: String(booking.booking_date),
-        chefPhone: booking.chefs?.phone || null,
+        chefPhone: chefJoin?.phone || null,
         totalPrice: Number(booking.total_price || 0),
       }
     ).catch((err) =>

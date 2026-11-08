@@ -156,7 +156,7 @@ export async function notifyRequestReceived(
     [ctx.customerName, ctx.reference, details.date, String(details.guests), details.location],
     `Hi ${ctx.customerName}, request ${ctx.reference} received for ${details.date} ` +
       `(${details.guests} guests, ${details.location}). We are finding you a chef. ` +
-      `Track: ${SITE_URL()}/request/status?ref=${ctx.reference}`
+      `Track: ${SITE_URL()}/request/status?id=${encodeURIComponent(ctx.bookingId)}`
   );
 }
 
@@ -178,7 +178,7 @@ export async function notifyChefAssigned(
     TEMPLATES.CHEF_ASSIGNED,
     [ctx.customerName, details.chefName, details.date, ctx.reference],
     `Hi ${ctx.customerName}, ${details.chefName} has been assigned to your booking ` +
-      `${ctx.reference} on ${details.date}. Track: ${SITE_URL()}/request/status?ref=${ctx.reference}`
+      `${ctx.reference} on ${details.date}. Track: ${SITE_URL()}/request/status?id=${encodeURIComponent(ctx.bookingId)}`
   );
 }
 

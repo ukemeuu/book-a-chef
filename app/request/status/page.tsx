@@ -71,7 +71,19 @@ function statusToStage(status: string): number {
 
 function StatusContent() {
   const searchParams = useSearchParams();
-  const ref = searchParams.get("ref") || "";
+  const rawId = searchParams.get("id") || "";
+  // Only a full UUID can be polled. Older links carried a short reference, so
+  // the effect below resolves those to the real row instead of polling a value
+  // the API can never find.
+  const bookingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    rawId
+  )
+    ? rawId
+    : "";
+  // A link that only carries ?id= is still valid — derive the human reference
+  // from it instead of rendering "No booking selected".
+  const ref =
+    searchParams.get("ref") || (bookingId ? bookingId.slice(0, 8).toUpperCase() : "");
   const name = searchParams.get("name") || "there";
   const queryCuisine = searchParams.get("cuisine") || "";
   const queryGuests = searchParams.get("guests") || "4";
@@ -79,13 +91,9 @@ function StatusContent() {
   const queryLocation = searchParams.get("location") || "";
 
   const [currentStage, setCurrentStage] = useState(1);
-  const [showChat, setShowChat] = useState(false);
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: string; text: string }>>([]);
-  const [newMessage, setNewMessage] = useState("");
   const [chef, setChef] = useState<ChefInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
-  const [authError, setAuthError] = useState(false);
 
   // Tracking is account-only — bounce signed-out visitors to sign in.
   // If no booking ref was supplied, resolve their most recent booking so the
@@ -99,23 +107,44 @@ function StatusContent() {
 
       if (!user) {
         window.location.href = `/login?redirect=${encodeURIComponent(
-          `/request/status${ref ? `?ref=${ref}` : ""}`
+          `/request/status${window.location.search || ""}`
         )}`;
         return;
       }
 
-      if (!ref) {
+      if (!bookingId) {
         try {
-          const { data: latest } = await supabase
+          // RLS already limits this to the caller's bookings. Fetch a page and
+          // match the legacy short reference in memory: the id is a uuid
+          // column, so a SQL prefix filter would need a cast PostgREST does not
+          // reliably support.
+          const { data: mine } = await supabase
             .from("bookings")
             .select("id")
             .or(`client_id.eq.${user.id},client_email.eq.${user.email}`)
             .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .limit(50);
 
-          if (latest?.id) {
-            window.location.replace(`/request/status?ref=${latest.id}`);
+          const prefix = ref.toLowerCase().replace(/[^0-9a-f]/g, "");
+          let resolved: { id: string } | null = null;
+
+          if (prefix.length >= 6) {
+            const match = (mine || []).find((row: { id: string }) =>
+              String(row.id).toLowerCase().startsWith(prefix)
+            );
+            if (match?.id) resolved = { id: match.id };
+          }
+
+          // No usable reference at all — fall back to the latest booking.
+          if (!resolved && mine && mine.length > 0) {
+            resolved = { id: mine[0].id };
+          }
+
+          if (resolved?.id) {
+            const params = new URLSearchParams(window.location.search);
+            params.set("id", resolved.id);
+            params.set("ref", resolved.id.slice(0, 8).toUpperCase());
+            window.location.replace(`/request/status?${params.toString()}`);
             return;
           }
 
@@ -130,63 +159,34 @@ function StatusContent() {
       setAuthChecked(true);
     }
     checkAuth();
-  }, [ref]);
+  }, [bookingId, ref]);
 
   const fetchStatus = useCallback(async () => {
-    // No booking reference to poll — stop loading and let the empty state
-    // render instead of spinning forever.
-    if (!ref) {
+    // No pollable id — render the empty state instead of spinning forever.
+    if (!bookingId) {
       setLoading(false);
       return;
     }
     try {
-      const res = await fetch(`/api/dispatch/status?booking_id=${ref}`);
+      const res = await fetch(`/api/dispatch/status?booking_id=${bookingId}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data: StatusResponse = await res.json();
       if (data.success) {
         setCurrentStage(statusToStage(data.booking.status));
-        if (data.chef) {
-          setChef(data.chef);
-          if (data.booking.status === "assigned" || data.booking.status === "chef_accepted") {
-            setChatMessages((prev) => {
-              if (prev.some((m) => m.sender === "chef")) return prev;
-              return [
-                ...prev,
-                {
-                  sender: "chef",
-                  text: `Hi ${name}! I'm ${data.chef!.name}. I've accepted your booking for ${queryDate || "your event"}. Looking forward to cooking for you!`,
-                },
-              ];
-            });
-          }
-        }
+        if (data.chef) setChef(data.chef);
       }
     } catch (err) {
       console.warn("[status] Poll error:", err);
     } finally {
       setLoading(false);
     }
-  }, [ref, name, queryDate]);
+  }, [bookingId]);
 
   useEffect(() => {
     fetchStatus();
     const interval = setInterval(fetchStatus, 5000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
-
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-    const msg = newMessage.trim();
-    setChatMessages((prev) => [...prev, { sender: "user", text: msg }]);
-    setNewMessage("");
-    setTimeout(() => {
-      setChatMessages((prev) => [
-        ...prev,
-        { sender: "concierge", text: "Thanks! We've noted this and notified your chef." },
-      ]);
-    }, 1500);
-  };
 
   if (!authChecked) {
     return (
@@ -346,71 +346,48 @@ function StatusContent() {
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowChat(!showChat)}
-                className="flex-1 py-2.5 rounded-xl bg-forest-950 text-white text-sm font-medium hover:bg-forest-800 transition-colors flex items-center justify-center gap-2"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Chat
-              </button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              {/* No in-app chat. There is no message table and no realtime
+                  channel behind it, so the old chat box only echoed the user's
+                  own text with a scripted reply. WhatsApp is the channel that
+                  actually reaches the chef. */}
               <a
-                href={`https://wa.me/254786530713?text=${encodeURIComponent(
-                  `Hi Chef! I'm ${name}, client for booking #${ref} on ${queryDate}.`
+                href={`https://wa.me/${
+                  chef.phone
+                    ? String(chef.phone).replace(/\D/g, "").replace(/^0/, "254")
+                    : "254786530713"
+                }?text=${encodeURIComponent(
+                  `Hi ${chef.name}, I'm ${name}, your client for booking #${ref} on ${
+                    queryDate || "my event"
+                  }.`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
               >
                 <MessageCircle className="h-4 w-4" />
-                WhatsApp
+                {chef.phone ? "Message your chef" : "Message concierge"}
               </a>
+              {chef.phone && (
+                <a
+                  href={`tel:${String(chef.phone).replace(/[^\d+]/g, "")}`}
+                  className="py-2.5 px-4 rounded-xl border border-forest-200 text-forest-700 text-sm font-medium hover:bg-cream-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Phone className="h-4 w-4" />
+                  Call
+                </a>
+              )}
               <a
-                href="tel:+254786530713"
-                className="py-2.5 px-4 rounded-xl border border-forest-200 text-forest-700 text-sm font-medium hover:bg-cream-50 transition-colors flex items-center justify-center"
+                href={`https://wa.me/254786530713?text=${encodeURIComponent(
+                  `Hi Book A Chef, I need help with booking #${ref}.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2.5 px-4 rounded-xl border border-forest-200 text-forest-700 text-sm font-medium hover:bg-cream-50 transition-colors flex items-center justify-center gap-2"
               >
-                <Phone className="h-4 w-4" />
+                Concierge
               </a>
             </div>
-
-            {/* Chat */}
-            {showChat && (
-              <div className="mt-4 pt-4 border-t border-forest-100">
-                <div className="max-h-64 overflow-y-auto space-y-3 mb-3">
-                  {chatMessages.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                          msg.sender === "user"
-                            ? "bg-forest-950 text-white rounded-br-md"
-                            : "bg-cream-100 text-forest-950 rounded-bl-md"
-                        }`}
-                      >
-                        {msg.text}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type a message…"
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-cream-50 border border-forest-200 text-sm outline-none focus:border-forest-950 transition-colors"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2.5 rounded-xl bg-forest-950 text-white hover:bg-forest-800 transition-colors"
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                </form>
-              </div>
-            )}
           </div>
         )}
 

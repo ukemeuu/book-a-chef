@@ -1,27 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { INITIAL_CHEFS } from "@/utils/data";
 import { matchChefToBooking } from "@/utils/dispatch";
 import { notifyRequestReceived } from "@/utils/whatsapp-notify";
+import { runWithSchemaFallback } from "@/utils/schemaFallback";
 
-// Concierge Model: Server-side dining inquiry creation.
-// Diners do not need to sign in or create an account.
-// All inquiries are received by Book A Chef's concierge team for confirmation.
+export const dynamic = "force-dynamic";
+
+/**
+ * POST /api/bookings/create
+ *
+ * Creates a chef request and hands it to the dispatch engine.
+ *
+ * Two things this route used to do that made the whole platform look healthy
+ * while nothing worked:
+ *   1. It inserted columns that did not exist on the live table. PostgREST
+ *      rejected the entire insert, the catch block swallowed the error, and the
+ *      API returned a fabricated `BAC-123456` reference with HTTP 201. The
+ *      customer saw "request received"; no booking existed.
+ *   2. It let the client choose `status`. Anything could create a booking in
+ *      any state, including `confirmed` without payment.
+ *
+ * Now: authentication is required, status is derived server-side, unknown
+ * columns are folded into `dispatch_notes` instead of being dropped, and a
+ * failed insert returns a real error.
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
 
-    // 1. Check if user is authenticated (optional)
-    let user: any = null;
-    try {
-      const { data } = await supabase.auth.getUser();
-      user = data?.user || null;
-    } catch {
-      user = null;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          error: "Please sign in so we can attach this request to your account.",
+          code: "AUTH_REQUIRED",
+        },
+        { status: 401 }
+      );
     }
 
-    // 2. Parse and validate required fields
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const {
       chef_id,
       menu_id,
@@ -44,41 +65,44 @@ export async function POST(request: NextRequest) {
       occasion_types,
       dietary_requirements,
       budget_per_person,
-      status: requestedStatus,
-    } = body;
+    } = body || {};
 
-    // Accept either field name. The request form sends both, but older
-    // clients and the proposals flow have used `cuisine_preference`.
+    // Accept either field name. The request form sends both, but older clients
+    // and the proposals flow have used `cuisine_preference`.
     const cuisine_type = requestedCuisine || cuisine_preference;
 
-    // Full multi-select set, falling back to the primary choice so older
-    // clients and pre-existing rows still produce a usable match set.
-    const cuisineList: string[] =
+    const cuisineList: string[] = (
       Array.isArray(cuisine_types) && cuisine_types.length
         ? cuisine_types
         : cuisine_type
         ? [cuisine_type]
-        : [];
+        : []
+    ).filter((value: unknown): value is string => typeof value === "string" && !!value.trim());
 
     const occasionList: string[] = Array.isArray(occasion_types)
-      ? occasion_types.filter(Boolean)
+      ? occasion_types.filter((value: unknown): value is string => typeof value === "string" && !!value.trim())
       : [];
 
     const dietaryList: string[] = Array.isArray(dietary_requirements)
-      ? dietary_requirements.filter(Boolean)
+      ? dietary_requirements.filter((value: unknown): value is string => typeof value === "string" && !!value.trim())
       : [];
 
-    // Basic validation (chef_id is optional in Uber-style dispatch flow)
     if (!booking_date || !guests_count || !location_address) {
       return NextResponse.json(
-        { error: "Please fill in all required fields: date, guests, and event location." },
+        {
+          error:
+            "Please fill in all required fields: date, guests, and event location.",
+        },
         { status: 400 }
       );
     }
 
-    if (!client_name?.trim() || !client_phone?.trim()) {
+    if (!String(client_name || "").trim() || !String(client_phone || "").trim()) {
       return NextResponse.json(
-        { error: "Please provide your name and phone/WhatsApp number so our concierge can reach you." },
+        {
+          error:
+            "Please provide your name and phone/WhatsApp number so our concierge can reach you.",
+        },
         { status: 400 }
       );
     }
@@ -91,45 +115,67 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Resolve chef details (from DB, fallback catalog, or Concierge Dispatch)
-    let chefName = chef_id ? "Book A Chef Culinary Master" : "Concierge Dispatch (Matching In Progress)";
+    const requestedDate = new Date(booking_date);
+    if (Number.isNaN(requestedDate.getTime())) {
+      return NextResponse.json(
+        { error: "That booking date could not be read. Pick a date again." },
+        { status: 400 }
+      );
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (requestedDate < today) {
+      return NextResponse.json(
+        { error: "The event date is in the past. Choose an upcoming date." },
+        { status: 400 }
+      );
+    }
+
+    // Resolve chef and menu pricing server-side. A client-supplied price is
+    // never trusted: the booking total must come from the chef's rate.
+    let chefName = chef_id ? "Book A Chef Culinary Master" : "Matching you with a chef";
     let startingPrice = Number(budget_per_person) || 4500;
     let menuPricePerGuest: number | null = null;
     let menuTitle: string | null = null;
 
     if (chef_id) {
-      try {
-        const { data: dbChef } = await supabase
-          .from("chefs")
-          .select("id, name, price_per_guest")
-          .eq("id", chef_id)
-          .single();
+      const { data: dbChef } = await supabase
+        .from("chefs")
+        .select("id, name, price_per_guest, user_id")
+        .eq("id", chef_id)
+        .maybeSingle();
 
-        if (dbChef) {
-          chefName = dbChef.name;
-          startingPrice = Number(dbChef.price_per_guest) || 4500;
-        } else {
-          const localChef = INITIAL_CHEFS.find((c) => c.id === chef_id);
-          if (localChef) {
-            chefName = localChef.name;
-            startingPrice = localChef.startingPrice || 4500;
-          }
+      if (!dbChef) {
+        return NextResponse.json(
+          { error: "That chef is no longer available. Submit without a chef and we will match you." },
+          { status: 400 }
+        );
+      }
+      if (!dbChef.user_id) {
+        // A listing with no login can never accept. Offering it would strand
+        // the request exactly like the production ghosts did.
+        return NextResponse.json(
+          {
+            error:
+              "That chef cannot take requests right now. Submit without a chef and we will match you with an available one.",
+          },
+          { status: 409 }
+        );
+      }
+      chefName = dbChef.name;
+      startingPrice = Number(dbChef.price_per_guest) || 4500;
+
+      if (menu_id) {
+        const { data: dbMenu } = await supabase
+          .from("menus")
+          .select("id, title, price_per_guest, chef_id")
+          .eq("id", menu_id)
+          .maybeSingle();
+
+        if (dbMenu && (!dbMenu.chef_id || dbMenu.chef_id === chef_id)) {
+          menuPricePerGuest = Number(dbMenu.price_per_guest);
+          menuTitle = dbMenu.title;
         }
-
-        if (menu_id) {
-          const { data: dbMenu } = await supabase
-            .from("menus")
-            .select("id, title, price_per_guest")
-            .eq("id", menu_id)
-            .single();
-
-          if (dbMenu) {
-            menuPricePerGuest = Number(dbMenu.price_per_guest);
-            menuTitle = dbMenu.title;
-          }
-        }
-      } catch (err) {
-        console.warn("[bookings/create] Chef resolution warning:", err);
       }
     }
 
@@ -137,11 +183,14 @@ export async function POST(request: NextRequest) {
     const totalPrice = finalPricePerGuest * numGuests;
     const depositAmount = totalPrice;
 
-    // Service format label
-    const serviceFormatText = service_format === "delivery" ? "Cooked & Delivered (Drop-off)" : "In-Home Private Dining";
-    const sourcingText = sourcing_preference === "client_specified"
-      ? `Client Supplies Ingredients (${preferred_stores || "Self-Sourced"})`
-      : "Chef Sources Fresh at Store Till (0% Markup)";
+    const serviceFormatText =
+      service_format === "delivery"
+        ? "Cooked & Delivered (Drop-off)"
+        : "In-Home Private Dining";
+    const sourcingText =
+      sourcing_preference === "client_specified"
+        ? `Client Supplies Ingredients (${preferred_stores || "Self-Sourced"})`
+        : "Chef Sources Fresh at Store Till (0% Markup)";
 
     const formattedRequests = [
       cuisine_type ? `[Cuisine: ${cuisine_type}]` : null,
@@ -153,37 +202,43 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .join(" • ");
 
-    // 4. Construct booking payload
-    const bookingStatus = requestedStatus || (chef_id ? "pending" : "pending_assignment");
-    const bookingPayload = {
-      client_id: user?.id || null,
+    // Status is derived, never taken from the request body.
+    //   chef chosen  -> that chef must accept      -> 'assigned'
+    //   no chef      -> dispatch engine picks one  -> 'pending_assignment'
+    const bookingStatus = chef_id ? "assigned" : "pending_assignment";
+
+    // Extended matching facets live in their own columns once migration 04 is
+    // applied. Until then they survive in dispatch_notes as JSON, so dispatch
+    // can still read them rather than losing the cuisine entirely.
+    const dispatchNotes = JSON.stringify({
+      v: 1,
+      cuisines: cuisineList,
+      occasions: occasionList,
+      dietaries: dietaryList,
+      notes: typeof special_requests === "string" ? special_requests : "",
+    });
+
+    const bookingPayload: Record<string, any> = {
+      client_id: user.id,
       chef_id: chef_id || null,
       menu_id: menu_id || null,
-      client_name: client_name.trim(),
-      client_email: client_email?.trim() || user?.email || "concierge-client@bookachef.co.ke",
-      client_phone: client_phone.trim(),
+      client_name: String(client_name).trim(),
+      client_email: String(client_email || "").trim() || user.email || null,
+      client_phone: String(client_phone).trim(),
       booking_date,
       booking_time: booking_time || "19:00 (Dinner)",
       guests_count: numGuests,
-      location_address: location_address.trim(),
+      location_address: String(location_address).trim(),
       location_city: location_city || "Nairobi",
       special_requests: formattedRequests,
       dietary_notes: dietary_notes?.trim() || null,
-      // Persist these to their own columns.
-      //
-      // cuisine_type was previously only embedded in the special_requests text
-      // and never written to the column. utils/dispatch.ts scores cuisine match
-      // at 40 points — the largest single weight — off booking.cuisine_type, so
-      // with the column always NULL the whole cuisine tier was dead and every
-      // match ran on location, rating and availability alone.
-      //
-      // budget_per_person likewise arrived from the form but was discarded;
-      // dispatch and the chef-dashboard payout estimate both read it.
       cuisine_type: cuisine_type || null,
       cuisine_types: cuisineList.length ? cuisineList : null,
       occasion_types: occasionList.length ? occasionList : null,
       dietary_requirements: dietaryList.length ? dietaryList : null,
-      budget_per_person: budget_per_person != null ? Number(budget_per_person) : null,
+      budget_per_person:
+        budget_per_person != null ? Number(budget_per_person) : null,
+      dispatch_notes: dispatchNotes,
       service_format,
       sourcing_preference,
       preferred_stores: preferred_stores?.trim() || null,
@@ -192,78 +247,82 @@ export async function POST(request: NextRequest) {
       deposit_amount: depositAmount,
       deposit_paid: false,
       status: bookingStatus,
+      ...(chef_id ? { assigned_at: new Date().toISOString() } : {}),
     };
 
-    let createdId = `BAC-${Math.floor(100000 + Math.random() * 900000)}`;
-    let bookingRecord = { ...bookingPayload, id: createdId };
+    const { data: newBooking, error: insertError, dropped } =
+      await runWithSchemaFallback(bookingPayload, (cleanPayload) =>
+        supabase.from("bookings").insert([cleanPayload]).select().single()
+      );
 
-    // 5. Insert into Supabase
-    try {
-      const { data: newBooking, error: insertError } = await supabase
-        .from("bookings")
-        .insert([bookingPayload])
-        .select()
-        .single();
-
-      if (!insertError && newBooking) {
-        createdId = newBooking.id;
-        bookingRecord = newBooking;
-
-        const cleanRef =
-          createdId.length > 8 ? createdId.slice(0, 8).toUpperCase() : createdId;
-
-        // Notify the customer their request is in (fire-and-forget —
-        // never block or fail the response on a notification error).
-        notifyRequestReceived(
-          { supabase, bookingId: createdId, reference: cleanRef, customerName: client_name.trim(), customerPhone: client_phone.trim() },
-          {
-            date: String(booking_date),
-            guests: numGuests,
-            location: String(location_city || "Nairobi"),
-            cuisine: String(cuisine_type || "Any"),
-          }
-        ).catch((err) =>
-          console.warn("[bookings/create] Request-received notification failed:", err)
-        );
-
-        // Trigger dispatch matching (fire-and-forget — don't block response)
-        if (!chef_id && bookingStatus === "pending_assignment") {
-          matchChefToBooking(supabase, createdId).catch((err) => {
-            console.warn("[bookings/create] Auto-matching failed (will retry via cron):", err);
-          });
-        }
-      } else if (insertError) {
-        console.warn("[bookings/create] Supabase insert note (continuing with reference):", insertError.message);
-      }
-    } catch (e) {
-      console.warn("[bookings/create] Database insert handled gracefully:", e);
+    if (insertError || !newBooking) {
+      console.error("[bookings/create] Insert failed:", insertError, {
+        dropped,
+        user: user.id,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "We could not save your request. Nothing was charged. Please try again, or message our concierge on WhatsApp and we will place it for you.",
+          code: "BOOKING_WRITE_FAILED",
+        },
+        { status: 500 }
+      );
     }
 
-    // 6. Audit log (best-effort)
+    const createdId: string = newBooking.id;
+    const cleanRef = createdId.slice(0, 8).toUpperCase();
+
+    // Notifications and dispatch are fire-and-forget: neither may fail the
+    // customer's request after the row is committed.
+    notifyRequestReceived(
+      {
+        supabase,
+        bookingId: createdId,
+        reference: cleanRef,
+        customerName: String(client_name).trim(),
+        customerPhone: String(client_phone).trim(),
+      },
+      {
+        date: String(booking_date),
+        guests: numGuests,
+        location: String(location_city || "Nairobi"),
+        cuisine: cuisine_type || cuisineList.join(", ") || "Any",
+      }
+    ).catch((err) =>
+      console.warn("[bookings/create] Request-received notification failed:", err)
+    );
+
+    if (!chef_id && bookingStatus === "pending_assignment") {
+      matchChefToBooking(supabase, createdId).catch((err) => {
+        console.warn(
+          "[bookings/create] Auto-matching failed (request stays open):",
+          err
+        );
+      });
+    }
+
+    // Best-effort audit. A missing audit_logs table must not hide a booking.
     try {
       await supabase.from("audit_logs").insert([
         {
-          action: "concierge_inquiry_created",
-          actor_id: user?.id || null,
+          action: "booking_created",
+          actor_id: user.id,
           entity_type: "booking",
           entity_id: createdId,
           metadata: {
             chef_name: chefName,
-            client_name: client_name.trim(),
-            client_phone: client_phone.trim(),
             total_price: totalPrice,
             date: booking_date,
+            dropped_fields: dropped,
           },
         },
       ]);
     } catch {}
 
-    // 7. Format WhatsApp message link for direct concierge handoff
-    const cleanRef = createdId.length > 8 ? createdId.slice(0, 8).toUpperCase() : createdId;
     const whatsappMessage = chef_id
-      ? `Hi Book A Chef Concierge! I just submitted an inquiry for Chef ${chefName} on ${booking_date} for ${numGuests} guests in ${location_city || "Nairobi"} (Ref: #${cleanRef}). I'd like to confirm availability and discuss our custom menu!`
-      : `Hi Book A Chef Concierge! I just submitted a chef request for ${numGuests} guests on ${booking_date} in ${location_city || "Nairobi"} (Ref: #${cleanRef}). Please match and dispatch a certified chef for our event!`;
-    const whatsappUrl = `https://wa.me/254786530713?text=${encodeURIComponent(whatsappMessage)}`;
+      ? `Hi Book A Chef! I just requested Chef ${chefName} for ${numGuests} guests on ${booking_date} in ${location_city || "Nairobi"} (Ref: #${cleanRef}). Please confirm availability.`
+      : `Hi Book A Chef! I just requested a chef for ${numGuests} guests on ${booking_date} in ${location_city || "Nairobi"} (Ref: #${cleanRef}). Please match me with a chef.`;
 
     return NextResponse.json(
       {
@@ -277,18 +336,27 @@ export async function POST(request: NextRequest) {
           booking_date,
           booking_time: booking_time || "19:00 (Dinner)",
           chef_name: chefName,
-          client_name: client_name.trim(),
-          client_phone: client_phone.trim(),
+          chef_id: chef_id || null,
+          client_name: String(client_name).trim(),
+          client_phone: String(client_phone).trim(),
         },
-        whatsapp_url: whatsappUrl,
-        message: "Your dining request has been received by our concierge. We will match you with a certified chef shortly.",
+        whatsapp_url: `https://wa.me/254786530713?text=${encodeURIComponent(
+          whatsappMessage
+        )}`,
+        dropped_fields: dropped,
+        message: chef_id
+          ? "Request sent to the chef. We'll confirm as soon as they accept."
+          : "Request received. We're matching you with a chef now.",
       },
       { status: 201 }
     );
   } catch (err: any) {
     console.error("[bookings/create] Unexpected error:", err);
     return NextResponse.json(
-      { error: "An unexpected error occurred. Please try again or chat directly with our concierge on WhatsApp." },
+      {
+        error:
+          "An unexpected error occurred. Please try again or chat directly with our concierge on WhatsApp.",
+      },
       { status: 500 }
     );
   }

@@ -51,7 +51,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Only a booking that has a chef (or is awaiting legacy acceptance) can be
+    // paid for. Taking money on an unassigned or cancelled booking leaves the
+    // customer paid with no chef to deliver.
+    const payableStatuses = ["pending", "assigned", "chef_accepted", "payment_pending"];
+    if (!payableStatuses.includes(String(booking.status))) {
+      return NextResponse.json(
+        {
+          error:
+            booking.status === "pending_assignment"
+              ? "We are still matching a chef to this request. You can pay as soon as one accepts."
+              : "This booking is no longer open for payment.",
+        },
+        { status: 400 }
+      );
+    }
+
     const depositAmount = Number(booking.deposit_amount);
+
+    if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
+      return NextResponse.json(
+        { error: "This booking has no payable deposit amount. Please contact support." },
+        { status: 400 }
+      );
+    }
 
     // 3. Trigger M-Pesa STK Push
     const stkResult = await initiateSTKPush(
@@ -81,8 +104,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Record payment attempt
-    await supabase.from("payments").insert([
+    // 4. Record payment attempt. This row is what the callback looks up and
+    // what makes confirmation idempotent, so a silent failure here would mean
+    // the customer pays and the booking never confirms. Fail loudly instead.
+    const { error: paymentInsertError } = await supabase.from("payments").insert([
       {
         booking_id: booking.id,
         client_id: user.id,
@@ -96,11 +121,24 @@ export async function POST(request: NextRequest) {
       },
     ]);
 
+    if (paymentInsertError) {
+      console.error("[mpesa/initiate] Could not record payment attempt:", paymentInsertError);
+      return NextResponse.json(
+        {
+          error:
+            "The M-Pesa prompt was sent, but we could not record the payment attempt. Please contact support before entering your PIN.",
+          checkoutRequestId: stkResult.checkoutRequestId,
+        },
+        { status: 500 }
+      );
+    }
+
     // Transition booking to PAYMENT_PENDING
     await supabase
       .from("bookings")
       .update({ status: "payment_pending" })
-      .eq("id", booking.id);
+      .eq("id", booking.id)
+      .in("status", payableStatuses);
 
     return NextResponse.json({
       success: true,

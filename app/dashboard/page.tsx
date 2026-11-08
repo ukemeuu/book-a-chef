@@ -7,21 +7,23 @@ import { useRouter } from "next/navigation";
 import {
   Calendar, Clock, MapPin, Users, LogOut, ChevronRight,
   ChefHat, Loader2, Phone, MessageSquare, Send, AlertCircle,
-  XCircle, DollarSign, AlertTriangle, Home, Truck, Receipt, Star, Activity,
+  XCircle, DollarSign, AlertTriangle, Home, Truck, Receipt, Star, Activity, Heart,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import StatusStepper from "@/components/booking/StatusStepper";
 import { Booking, ChatMessage } from "@/utils/data";
+import { MarketplaceChef } from "@/utils/marketplace";
 import { createClient } from "@/utils/supabase/client";
 
 export default function ClientDashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"bookings" | "messages">("bookings");
+  const [activeTab, setActiveTab] = useState<"bookings" | "messages" | "favourites">("bookings");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [favouriteChefs, setFavouriteChefs] = useState<MarketplaceChef[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedBookingForChat, setSelectedBookingForChat] = useState<Booking | null>(null);
 
@@ -142,6 +144,25 @@ export default function ClientDashboardPage() {
               content: m.content,
               createdAt: m.created_at,
             }))
+          );
+        }
+
+        // Load favourite chefs.
+        const { data: favRows } = await supabase
+          .from("chef_favorites")
+          .select("chef_id, chefs(*)")
+          .eq("client_id", authUser.id)
+          .order("created_at", { ascending: false });
+
+        if (favRows && favRows.length > 0) {
+          setFavouriteChefs(
+            favRows
+              .map((f: any) => f.chefs)
+              .filter(Boolean)
+              .map((c: any) => ({
+                ...c,
+                menus: [],
+              }))
           );
         }
       } catch (err) {
@@ -367,13 +388,23 @@ export default function ClientDashboardPage() {
           </button>
           <button
             onClick={() => setActiveTab("messages")}
-            className={`px-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-1 py-3 mr-6 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "messages"
                 ? "border-forest-950 text-forest-950"
                 : "border-transparent text-forest-500 hover:text-forest-800"
             }`}
           >
             Messages
+          </button>
+          <button
+            onClick={() => setActiveTab("favourites")}
+            className={`px-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "favourites"
+                ? "border-forest-950 text-forest-950"
+                : "border-transparent text-forest-500 hover:text-forest-800"
+            }`}
+          >
+            Favourites ({favouriteChefs.length})
           </button>
         </div>
 
@@ -516,7 +547,7 @@ export default function ClientDashboardPage() {
                     {/* Deep link into the live dispatcher — always available,
                         regardless of whether a chef is assigned yet. */}
                     <Link
-                      href={`/request/status?ref=${booking.id}`}
+                      href={`/request/status?id=${booking.id}`}
                       className="px-4 py-2.5 rounded-xl border border-forest-200 text-forest-700 text-sm font-medium hover:bg-cream-50 transition-colors flex items-center gap-2"
                     >
                       <Activity className="h-4 w-4" />
@@ -659,6 +690,78 @@ export default function ClientDashboardPage() {
                 <Send className="h-4 w-4" />
               </button>
             </form>
+          </div>
+        )}
+
+        {/* FAVOURITES TAB */}
+        {activeTab === "favourites" && (
+          <div className="space-y-4">
+            {favouriteChefs.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {favouriteChefs.map((chef) => (
+                  <Link
+                    key={chef.id}
+                    href={`/chefs/${chef.slug}`}
+                    className="group block bg-white rounded-2xl border border-forest-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+                  >
+                    <div className="relative aspect-[16/9] bg-cream-100">
+                      <Image
+                        src={chef.cover_image_url || chef.avatar_url}
+                        alt={chef.name}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-bold text-forest-950 truncate">
+                          {chef.name}
+                        </h3>
+                        <span className="flex items-center gap-1 text-sm shrink-0">
+                          <Star className="h-3.5 w-3.5 text-champagne-500 fill-current" />
+                          {Number(chef.rating || 0).toFixed(1)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-forest-500 truncate">
+                        {chef.cuisines?.slice(0, 3).join(" • ")}
+                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-forest-500">
+                          {chef.city}
+                        </span>
+                        <span className="text-sm font-bold text-forest-950">
+                          KES {Number(chef.price_per_guest || 0).toLocaleString()}
+                          <span className="text-[10px] font-normal text-forest-400">
+                            {" "}
+                            /guest
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-forest-100 p-12 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-cream-100 flex items-center justify-center mx-auto mb-4">
+                  <Heart className="h-6 w-6 text-forest-400" />
+                </div>
+                <h3 className="text-lg font-bold text-forest-950 mb-1">
+                  No favourites yet
+                </h3>
+                <p className="text-sm text-forest-500 mb-6 max-w-sm mx-auto">
+                  Save chefs you love and they&apos;ll appear here for quick
+                  access.
+                </p>
+                <Link
+                  href="/chefs"
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-forest-950 text-white text-sm font-medium hover:bg-forest-800 transition-colors"
+                >
+                  <ChefHat className="h-4 w-4" />
+                  Browse chefs
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </main>

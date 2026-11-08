@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { createClient } from "@/utils/supabase/client";
 import {
@@ -190,6 +191,38 @@ function RequestChefContent() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
+  // Pre-fill the contact fields from the signed-in account. The user already
+  // authenticated, so asking them to retype their name and number is pure
+  // friction on the highest-intent screen in the funnel.
+  useEffect(() => {
+    let active = true;
+
+    async function prefill() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !active) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, phone, email")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!active) return;
+      setName((prev) => prev || profile?.full_name || user.user_metadata?.full_name || "");
+      setPhone((prev) => prev || profile?.phone || "");
+      setEmail((prev) => prev || profile?.email || user.email || "");
+    }
+
+    prefill();
+    return () => {
+      active = false;
+    };
+    // Contact fields only need to be filled once per visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const minDate = new Date();
   minDate.setDate(minDate.getDate() + 2);
   const minDateStr = minDate.toISOString().split("T")[0];
@@ -217,9 +250,7 @@ function RequestChefContent() {
 
     setSubmitting(true);
     try {
-      const ref = "BAC-" + Math.random().toString(36).substring(2, 8).toUpperCase();
       const payload = {
-        reference: ref,
         client_name: name.trim(),
         client_phone: phone.trim(),
         client_email: email.trim(),
@@ -246,7 +277,8 @@ function RequestChefContent() {
         dietary_notes: dietaryOther.trim() || dietary.join(", ") || null,
         special_requests: specialRequests,
         budget_per_person: parseInt(effectiveBudget) || 5000,
-        status: "pending_assignment",
+        // Status is derived by the server (dispatch flow). Sending one here
+        // would let the browser create a booking in any state.
       };
       const res = await fetch("/api/bookings/create", {
         method: "POST",
@@ -255,8 +287,28 @@ function RequestChefContent() {
       });
 
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const bookingId = data?.booking?.id || "";
+        const reference = data?.reference || "";
+
+        if (!bookingId) {
+          // Never navigate to a status page we cannot poll.
+          setErrors({
+            submit:
+              "Your request was saved, but we could not open the tracker. Open My bookings from the dashboard instead.",
+          });
+          setSubmitting(false);
+          return;
+        }
+
         router.push(
-          `/request/status?ref=${ref}&name=${encodeURIComponent(name)}&cuisine=${encodeURIComponent(cuisine)}&guests=${guests}&date=${encodeURIComponent(date)}&location=${encodeURIComponent(location)}`
+          `/request/status?id=${encodeURIComponent(bookingId)}&ref=${encodeURIComponent(
+            reference
+          )}&name=${encodeURIComponent(name)}&cuisine=${encodeURIComponent(
+            cuisine
+          )}&guests=${guests}&date=${encodeURIComponent(
+            date
+          )}&location=${encodeURIComponent(location)}`
         );
       } else {
         const data = await res.json().catch(() => ({}));
@@ -294,6 +346,13 @@ function RequestChefContent() {
           </h1>
           <p className="mt-2 text-forest-500">
             Tell us what you need. We&apos;ll handle the rest.
+          </p>
+          <p className="mt-2 text-sm text-forest-500">
+            Or{" "}
+            <Link href="/chefs" className="font-medium text-forest-950 underline underline-offset-2">
+              browse our chefs
+            </Link>{" "}
+            and book one directly.
           </p>
         </div>
 

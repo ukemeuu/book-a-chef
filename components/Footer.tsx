@@ -13,8 +13,9 @@ export default function Footer() {
               <span className="font-bold text-white">Book A Chef</span>
             </Link>
             <p className="text-sm text-cream-200/60 leading-relaxed">
-              On-demand private chefs across Kenya. Tell us what you need, we&apos;ll match
-              you with the perfect chef.
+              Kenya&apos;s marketplace for private chefs. Browse verified chefs,
+              view their menus, and book directly — or tell us what you need and
+              we&apos;ll match you.
             </p>
           </div>
 
@@ -22,6 +23,11 @@ export default function Footer() {
           <div>
             <h3 className="text-sm font-medium text-white mb-3">Dine</h3>
             <ul className="space-y-2 text-sm text-cream-200/60">
+              <li>
+                <Link href="/chefs" className="hover:text-white transition-colors">
+                  Browse chefs
+                </Link>
+              </li>
               <li>
                 <Link href="/request" className="hover:text-white transition-colors">
                   Request a chef

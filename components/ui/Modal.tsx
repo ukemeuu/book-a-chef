@@ -56,7 +56,7 @@ export default function Modal({
       onClick={onClose}
     >
       <div
-        className={`relative w-full ${maxWidthClasses} bg-white rounded-t-[32px] sm:rounded-[36px] max-h-[92vh] flex flex-col shadow-2xl border border-forest-100/80 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-6 sm:slide-in-from-bottom-0 duration-200`}
+        className={`relative w-full ${maxWidthClasses} bg-white rounded-t-2xl sm:rounded-2xl max-h-[92vh] flex flex-col shadow-2xl border border-forest-100/80 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-6 sm:slide-in-from-bottom-0 duration-200`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -64,7 +64,7 @@ export default function Modal({
           <div className="flex items-center justify-between px-6 py-4 border-b border-forest-100/70 bg-white/95 backdrop-blur-md sticky top-0 z-20">
             <div>
               {title && (
-                <h3 className="font-serif text-xl sm:text-2xl font-bold text-forest-950 tracking-tight">
+                <h3 className="font-sans text-xl sm:text-2xl font-bold text-forest-950 tracking-tight">
                   {title}
                 </h3>
               )}

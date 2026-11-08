@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,12 +58,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!booking.chef_id) {
+      return NextResponse.json(
+        { error: "This booking has no chef attached, so it cannot be reviewed." },
+        { status: 400 }
+      );
+    }
+
     // Check for duplicate review
     const { data: existingReview } = await supabase
       .from("reviews")
       .select("id")
       .eq("booking_id", booking_id)
-      .single();
+      .maybeSingle();
 
     if (existingReview) {
       return NextResponse.json(
@@ -93,22 +101,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to save review." }, { status: 500 });
     }
 
-    // Recalculate chef aggregate rating
-    const { data: allReviews } = await supabase
-      .from("reviews")
-      .select("rating")
-      .eq("chef_id", booking.chef_id);
+    // Recalculate chef aggregate rating.
+    //
+    // The client session cannot write to `chefs` (RLS), which is why ratings
+    // silently never updated. Use the service-role client when it is
+    // configured, and report failure instead of pretending it worked.
+    if (booking.chef_id) {
+      const writer = createAdminClient() ?? supabase;
 
-    if (allReviews && allReviews.length > 0) {
-      const avg =
-        allReviews.reduce((sum: number, r: any) => sum + Number(r.rating), 0) / allReviews.length;
-      await supabase
-        .from("chefs")
-        .update({
-          rating: Math.round(avg * 100) / 100,
-          reviews_count: allReviews.length,
-        })
-        .eq("id", booking.chef_id);
+      const { data: allReviews } = await writer
+        .from("reviews")
+        .select("rating")
+        .eq("chef_id", booking.chef_id);
+
+      if (allReviews && allReviews.length > 0) {
+        const avg =
+          allReviews.reduce((sum: number, r: any) => sum + Number(r.rating), 0) / allReviews.length;
+
+        const { error: aggError } = await writer
+          .from("chefs")
+          .update({
+            rating: Math.round(avg * 100) / 100,
+            reviews_count: allReviews.length,
+          })
+          .eq("id", booking.chef_id);
+
+        if (aggError) {
+          console.warn("[reviews/submit] Could not update chef rating:", aggError.message);
+        }
+      }
     }
 
     return NextResponse.json({
