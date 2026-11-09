@@ -13,7 +13,6 @@ import {
   ArrowRight,
   BadgeCheck,
   Phone,
-  MessageCircle,
   Heart,
   Home,
   Truck,
@@ -24,9 +23,15 @@ import {
   Fish,
   Briefcase,
   Sparkles,
+  Quote,
+  Clock,
+  Users,
+  UtensilsCrossed,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import Reveal from "@/components/Reveal";
+import ChefCard from "@/components/chef/ChefCard";
 import {
   MarketplaceChef,
   chefAvatar,
@@ -36,7 +41,7 @@ import {
 } from "@/utils/marketplace";
 import { createClient } from "@/utils/supabase/client";
 
-/* ── Category data ─────────────────────────────────────────────────────────── */
+/* ── Data ──────────────────────────────────────────────────────────────────── */
 
 const CUISINE_CATEGORIES = [
   { id: "Swahili", label: "Swahili", icon: "🍛", slug: "swahili" },
@@ -50,17 +55,6 @@ const CUISINE_CATEGORIES = [
   { id: "Vegan", label: "Plant-Based", icon: "🥗" },
   { id: "Kenyan", label: "Kenyan Traditional", icon: "🍲" },
   { id: "French", label: "French", icon: "🧀" },
-];
-
-const CHEF_TYPES = [
-  { id: "private", label: "Private Chef", desc: "Cooked in your home", icon: Home },
-  { id: "corporate", label: "Corporate & Events", desc: "Team dinners, client events", icon: Briefcase },
-  { id: "bbq", label: "BBQ & Grilling", desc: "Nyama choma, outdoor feasts", icon: Flame },
-  { id: "finedining", label: "Fine Dining", desc: "Plated multi-course tastings", icon: Wine },
-  { id: "delivery", label: "Cooked & Delivered", desc: "Hot food to your door", icon: Truck },
-  { id: "healthy", label: "Healthy & Vegan", desc: "Plant-based, guilt-free", icon: Leaf },
-  { id: "desserts", label: "Pastry & Desserts", desc: "Cakes, baking, sweet endings", icon: Cake },
-  { id: "seafood", label: "Seafood Specialist", desc: "Coastal and ocean catches", icon: Fish },
 ];
 
 const CUISINE_CARDS = [
@@ -114,13 +108,90 @@ const CUISINE_CARDS = [
   },
 ];
 
+const CHEF_TYPES = [
+  { id: "private", label: "Private Chef", desc: "Cooked in your home", icon: Home },
+  { id: "corporate", label: "Corporate & Events", desc: "Team dinners, client events", icon: Briefcase },
+  { id: "bbq", label: "BBQ & Grilling", desc: "Nyama choma, outdoor feasts", icon: Flame },
+  { id: "finedining", label: "Fine Dining", desc: "Plated multi-course tastings", icon: Wine },
+  { id: "delivery", label: "Cooked & Delivered", desc: "Hot food to your door", icon: Truck },
+  { id: "healthy", label: "Healthy & Vegan", desc: "Plant-based, guilt-free", icon: Leaf },
+  { id: "desserts", label: "Pastry & Desserts", desc: "Cakes, baking, sweet endings", icon: Cake },
+  { id: "seafood", label: "Seafood Specialist", desc: "Coastal and ocean catches", icon: Fish },
+];
+
+const POPULAR_DISHES = [
+  {
+    name: "Coconut Prawns Pilau",
+    chef: "Chef Swiok",
+    slug: "chef-swiok",
+    price: "KES 3,800",
+    image: "https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&q=80&w=800",
+  },
+  {
+    name: "Charcoal Nyama Choma",
+    chef: "Chef Kenneth Kamau",
+    slug: "chef-kenneth-kamau-kamanu",
+    price: "KES 4,500",
+    image: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=800",
+  },
+  {
+    name: "Hand-Rolled Tagliatelle",
+    chef: "Chef Sophia Katana",
+    slug: "chef-sophia-katana",
+    price: "KES 4,500",
+    image: "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?auto=format&fit=crop&q=80&w=800",
+  },
+  {
+    name: "Plated Degustation",
+    chef: "Chef Rodgers kelly",
+    slug: "chef-rodgers-kelly",
+    price: "KES 5,000",
+    image: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=800",
+  },
+  {
+    name: "Whole Grilled Fish",
+    chef: "Ian Indika",
+    slug: "ian-indika",
+    price: "KES 30,000",
+    image: "https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&q=80&w=800",
+  },
+  {
+    name: "Street Food Spread",
+    chef: "Kennedy Milanya",
+    slug: "kennedy-milanya-ouma",
+    price: "KES 4,500",
+    image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=800",
+  },
+];
+
 const OCCASIONS = [
-  { name: "Birthday", icon: "🎂" },
-  { name: "Anniversary", icon: "🥂" },
-  { name: "Dinner Party", icon: "🍽️" },
-  { name: "Corporate Event", icon: "💼" },
-  { name: "Date Night", icon: "🕯️" },
-  { name: "Family Gathering", icon: "👨‍👩‍👧‍👦" },
+  { name: "Birthday", icon: "🎂", desc: "A cake, a dinner, and a night to remember." },
+  { name: "Anniversary", icon: "🥂", desc: "Recreate your first date, done properly." },
+  { name: "Dinner Party", icon: "🍽️", desc: "Impress your guests without lifting a finger." },
+  { name: "Corporate Event", icon: "💼", desc: "Client dinners and team celebrations, handled." },
+  { name: "Date Night", icon: "🕯️", desc: "A private table for two in your own home." },
+  { name: "Family Gathering", icon: "👨‍👩‍👧‍👦", desc: "Bring everyone together around one table." },
+];
+
+const TESTIMONIALS = [
+  {
+    quote:
+      "Chef Sophia cooked for our anniversary and it felt like a restaurant had moved into our home. Every course was perfect.",
+    name: "Wanjiru M.",
+    detail: "Private dinner, Nairobi",
+  },
+  {
+    quote:
+      "I called Chef Kenneth directly, agreed the menu, and he arrived with everything. The nyama choma was the best we've had.",
+    name: "David O.",
+    detail: "Garden party, Karen",
+  },
+  {
+    quote:
+      "Booking was just a phone call. No forms, no middleman — and the food was incredible value for a group of twelve.",
+    name: "Achieng N.",
+    detail: "Family gathering, Westlands",
+  },
 ];
 
 const HOW_IT_WORKS = [
@@ -162,7 +233,18 @@ const TRUST_FEATURES = [
   },
 ];
 
-/* ── Helpers ───────────────────────────────────────────────────────────────── */
+const DESTINATIONS = [
+  { name: "Westlands", area: "Nairobi" },
+  { name: "Karen", area: "Nairobi" },
+  { name: "Diani Beach", area: "Coast" },
+  { name: "Kilimani", area: "Nairobi" },
+  { name: "Runda", area: "Nairobi" },
+  { name: "Watamu", area: "Coast" },
+  { name: "Naivasha", area: "Rift Valley" },
+  { name: "Nyali", area: "Mombasa" },
+];
+
+/* ── Chef card (large) ─────────────────────────────────────────────────────── */
 
 function ChefCardLarge({
   chef,
@@ -210,8 +292,7 @@ function ChefCardLarge({
           type="button"
           onClick={onToggleFavorite}
           aria-label={isFavorite ? "Remove from favourites" : "Save to favourites"}
-          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-sm transition-colors"
-          style={{ display: topRated || chef.verified ? "none" : undefined }}
+          className="absolute top-12 right-3 w-9 h-9 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-sm transition-colors"
         >
           <Heart
             className={`h-4 w-4 ${isFavorite ? "fill-red-500 text-red-500" : "text-forest-600"}`}
@@ -288,6 +369,7 @@ export default function HomePage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [heroOffset, setHeroOffset] = useState(0);
 
   const carouselRef = useRef<HTMLDivElement>(null);
 
@@ -323,6 +405,13 @@ export default function HomePage() {
     }
     loadFavorites();
   }, [supabase]);
+
+  // Subtle parallax on the hero
+  useEffect(() => {
+    const onScroll = () => setHeroOffset(window.scrollY);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const toggleFavorite = async (chef: MarketplaceChef) => {
     const {
@@ -371,62 +460,71 @@ export default function HomePage() {
       <Navbar />
 
       {/* ── HERO ── */}
-      <section className="relative bg-forest-950 pt-28 pb-14 sm:pt-36 sm:pb-20">
-        <div className="absolute inset-0 overflow-hidden">
+      <section className="relative bg-forest-950 pt-28 pb-14 sm:pt-36 sm:pb-20 overflow-hidden">
+        <div
+          className="absolute inset-0 overflow-hidden"
+          style={{ transform: `translateY(${heroOffset * 0.25}px)` }}
+        >
           <Image
             src="https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&q=80&w=2070"
             alt="Private dining"
             fill
+            priority
             className="object-cover opacity-25"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-forest-950/60 via-forest-950/80 to-forest-950" />
         </div>
 
         <div className="relative max-w-3xl mx-auto px-4 text-center">
-          <h1 className="font-sans text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
-            A private chef for
-            <br />
-            <span className="text-champagne-400">every occasion.</span>
-          </h1>
-          <p className="mt-4 text-base sm:text-lg text-cream-200/80 max-w-xl mx-auto leading-relaxed">
-            Browse verified chefs, see what they cook, and call them directly.
-          </p>
+          <Reveal>
+            <h1 className="font-sans text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight">
+              A private chef for
+              <br />
+              <span className="text-champagne-400">every occasion.</span>
+            </h1>
+            <p className="mt-4 text-base sm:text-lg text-cream-200/80 max-w-xl mx-auto leading-relaxed">
+              Browse verified chefs, see what they cook, and call them directly.
+            </p>
+          </Reveal>
 
-          {/* Search */}
-          <form
-            onSubmit={handleSearch}
-            className="mt-8 bg-white rounded-2xl shadow-2xl p-2 flex items-center gap-2 max-w-xl mx-auto"
-          >
-            <div className="flex-1 flex items-center gap-2 px-4 py-3">
-              <Search className="h-4 w-4 text-forest-400 shrink-0" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search chefs, cuisines, or specialties…"
-                className="w-full text-sm font-medium text-forest-950 placeholder-forest-400 outline-none bg-transparent"
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-6 py-3 rounded-xl bg-forest-950 hover:bg-forest-800 text-white text-sm font-bold transition-colors shrink-0"
+          <Reveal delay={100}>
+            <form
+              onSubmit={handleSearch}
+              className="mt-8 bg-white rounded-2xl shadow-2xl p-2 flex items-center gap-2 max-w-xl mx-auto"
             >
-              Search
-            </button>
-          </form>
-
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            {OCCASIONS.map((o) => (
-              <Link
-                key={o.name}
-                href="/chefs"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-cream-100 text-xs font-medium transition-colors"
+              <div className="flex-1 flex items-center gap-2 px-4 py-3">
+                <Search className="h-4 w-4 text-forest-400 shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search chefs, cuisines, or specialties…"
+                  className="w-full text-sm font-medium text-forest-950 placeholder-forest-400 outline-none bg-transparent"
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-6 py-3 rounded-xl bg-forest-950 hover:bg-forest-800 text-white text-sm font-bold transition-colors shrink-0"
               >
-                <span aria-hidden="true">{o.icon}</span>
-                {o.name}
-              </Link>
-            ))}
-          </div>
+                Search
+              </button>
+            </form>
+          </Reveal>
+
+          <Reveal delay={200}>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              {OCCASIONS.map((o) => (
+                <Link
+                  key={o.name}
+                  href="/chefs"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-cream-100 text-xs font-medium transition-colors"
+                >
+                  <span aria-hidden="true">{o.icon}</span>
+                  {o.name}
+                </Link>
+              ))}
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -492,35 +590,38 @@ export default function HomePage() {
       {featuredChefs.length > 0 && (
         <section className="py-14 sm:py-18">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-end justify-between mb-6">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-                  Handpicked
-                </p>
-                <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-                  Featured chefs
-                </h2>
-                <p className="mt-2 text-forest-500 max-w-lg">
-                  Verified, vetted, and ready to cook for you.
-                </p>
+            <Reveal>
+              <div className="flex items-end justify-between mb-6">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                    Handpicked
+                  </p>
+                  <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                    Featured chefs
+                  </h2>
+                  <p className="mt-2 text-forest-500 max-w-lg">
+                    Verified, vetted, and ready to cook for you.
+                  </p>
+                </div>
+                <Link
+                  href="/chefs"
+                  className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-forest-950 hover:text-forest-700 transition-colors shrink-0"
+                >
+                  Show all {allChefs.length} chefs
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
-              <Link
-                href="/chefs"
-                className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-forest-950 hover:text-forest-700 transition-colors shrink-0"
-              >
-                Show all {allChefs.length} chefs
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
+            </Reveal>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {featuredChefs.slice(0, 8).map((chef) => (
-                <ChefCardLarge
-                  key={chef.id}
-                  chef={chef}
-                  isFavorite={favorites.has(chef.id)}
-                  onToggleFavorite={(e) => toggleFavorite(chef)}
-                />
+              {featuredChefs.slice(0, 8).map((chef, i) => (
+                <Reveal key={chef.id} delay={i * 60}>
+                  <ChefCardLarge
+                    chef={chef}
+                    isFavorite={favorites.has(chef.id)}
+                    onToggleFavorite={(e) => toggleFavorite(chef)}
+                  />
+                </Reveal>
               ))}
             </div>
 
@@ -537,51 +638,146 @@ export default function HomePage() {
         </section>
       )}
 
+      {/* ── POPULAR DISHES ── */}
+      <section className="py-14 sm:py-18 bg-forest-950">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal>
+            <div className="flex items-end justify-between mb-8">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-champagne-400 mb-2">
+                  From the kitchens
+                </p>
+                <h2 className="font-sans text-3xl sm:text-4xl font-bold text-white tracking-tight">
+                  Popular right now
+                </h2>
+              </div>
+              <Link
+                href="/chefs"
+                className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-cream-200 hover:text-white transition-colors shrink-0"
+              >
+                Browse all
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </Reveal>
+
+          <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+            {POPULAR_DISHES.map((dish, i) => (
+              <Reveal key={dish.name} delay={i * 60} className="shrink-0">
+                <Link
+                  href={`/chefs/${dish.slug}`}
+                  className="group relative block w-72 aspect-[4/5] rounded-2xl overflow-hidden bg-forest-900"
+                >
+                  <Image
+                    src={dish.image}
+                    alt={dish.name}
+                    fill
+                    sizes="288px"
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-forest-950/85 via-forest-950/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-5">
+                    <h3 className="font-bold text-white text-lg leading-tight">
+                      {dish.name}
+                    </h3>
+                    <p className="text-sm text-cream-200/80 mt-1">{dish.chef}</p>
+                    <span className="inline-flex items-center gap-1 text-sm font-bold text-champagne-400 mt-3">
+                      {dish.price}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                </Link>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── HOW IT WORKS ── */}
+      <section id="how-it-works" className="py-14 sm:py-18 scroll-mt-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal>
+            <div className="max-w-2xl mb-10">
+              <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                How it works
+              </p>
+              <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                Three steps to dinner
+              </h2>
+            </div>
+          </Reveal>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {HOW_IT_WORKS.map((item, i) => (
+              <Reveal key={item.step} delay={i * 100}>
+                <div className="group flex flex-col bg-white rounded-2xl p-6 border border-forest-100/70 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-11 h-11 rounded-xl bg-cream-100 flex items-center justify-center text-forest-700 group-hover:bg-forest-950 group-hover:text-champagne-400 transition-colors">
+                      {item.icon}
+                    </div>
+                    <span className="font-sans text-2xl font-bold leading-none text-champagne-500/40">
+                      {item.step}
+                    </span>
+                  </div>
+                  <h3 className="font-sans text-lg font-bold text-forest-950 mb-1.5">
+                    {item.title}
+                  </h3>
+                  <p className="text-sm text-forest-600 leading-relaxed">{item.desc}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── CUISINE SEGMENTS ── */}
       <section className="py-14 sm:py-18 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-6">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-                Cuisines
-              </p>
-              <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-                What are you craving?
-              </h2>
+          <Reveal>
+            <div className="flex items-end justify-between mb-6">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                  Cuisines
+                </p>
+                <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                  What are you craving?
+                </h2>
+              </div>
+              <Link
+                href="/cuisines"
+                className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-forest-950 hover:text-forest-700 transition-colors shrink-0"
+              >
+                Browse all
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
-            <Link
-              href="/chefs"
-              className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-forest-950 hover:text-forest-700 transition-colors shrink-0"
-            >
-              Browse all
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+          </Reveal>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
-            {CUISINE_CARDS.map((item) => (
-              <Link
-                key={item.name}
-                href={`/cuisines/${item.slug}`}
-                className="group relative shrink-0 w-64 sm:w-72 aspect-[3/4] rounded-2xl overflow-hidden bg-forest-950 focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
-              >
-                <Image
-                  src={item.image}
-                  alt={item.name}
-                  fill
-                  sizes="(max-width: 640px) 256px, 288px"
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-forest-950/80 via-forest-950/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <h3 className="font-bold text-white text-lg leading-tight">
-                    {item.name}
-                  </h3>
-                  <p className="text-xs text-cream-200/80 mt-1">{item.desc}</p>
-                </div>
-              </Link>
+            {CUISINE_CARDS.map((item, i) => (
+              <Reveal key={item.name} delay={i * 60} className="shrink-0">
+                <Link
+                  href={`/cuisines/${item.slug}`}
+                  className="group relative block w-64 sm:w-72 aspect-[3/4] rounded-2xl overflow-hidden bg-forest-950 focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+                >
+                  <Image
+                    src={item.image}
+                    alt={item.name}
+                    fill
+                    sizes="(max-width: 640px) 256px, 288px"
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-forest-950/80 via-forest-950/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <h3 className="font-bold text-white text-lg leading-tight">
+                      {item.name}
+                    </h3>
+                    <p className="text-xs text-cream-200/80 mt-1">{item.desc}</p>
+                  </div>
+                </Link>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -590,143 +786,174 @@ export default function HomePage() {
       {/* ── CHEF TYPES ── */}
       <section className="py-14 sm:py-18">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-2xl mb-8">
-            <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-              Chef types
-            </p>
-            <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-              Find the right kind of chef
-            </h2>
-            <p className="mt-2 text-forest-500">
-              From intimate dinners to full corporate catering.
-            </p>
-          </div>
+          <Reveal>
+            <div className="max-w-2xl mb-8">
+              <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                Chef types
+              </p>
+              <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                Find the right kind of chef
+              </h2>
+              <p className="mt-2 text-forest-500">
+                From intimate dinners to full corporate catering.
+              </p>
+            </div>
+          </Reveal>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {CHEF_TYPES.map((type) => {
+            {CHEF_TYPES.map((type, i) => {
               const Icon = type.icon;
               return (
-                <Link
-                  key={type.id}
-                  href="/chefs"
-                  className="group flex flex-col p-5 rounded-2xl bg-white border border-forest-100/70 hover:shadow-lg hover:-translate-y-1 hover:border-forest-200 transition-all duration-300"
-                >
-                  <div className="w-11 h-11 rounded-xl bg-cream-100 flex items-center justify-center text-forest-700 mb-3 group-hover:bg-forest-950 group-hover:text-champagne-400 transition-colors">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="font-bold text-forest-950 group-hover:text-forest-700 transition-colors">
-                    {type.label}
-                  </h3>
-                  <p className="text-xs text-forest-500 mt-1 leading-snug">
-                    {type.desc}
-                  </p>
-                </Link>
+                <Reveal key={type.id} delay={i * 50}>
+                  <Link
+                    href="/chefs"
+                    className="group flex flex-col p-5 rounded-2xl bg-white border border-forest-100/70 hover:shadow-lg hover:-translate-y-1 hover:border-forest-200 transition-all duration-300"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-cream-100 flex items-center justify-center text-forest-700 mb-3 group-hover:bg-forest-950 group-hover:text-champagne-400 transition-colors">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="font-bold text-forest-950 group-hover:text-forest-700 transition-colors">
+                      {type.label}
+                    </h3>
+                    <p className="text-xs text-forest-500 mt-1 leading-snug">
+                      {type.desc}
+                    </p>
+                  </Link>
+                </Reveal>
               );
             })}
           </div>
         </div>
       </section>
 
-      {/* ── HOW IT WORKS ── */}
-      <section id="how-it-works" className="py-14 sm:py-18 bg-cream-50">
+      {/* ── OCCASIONS ── */}
+      <section className="py-14 sm:py-18 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-2xl mb-10">
-            <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-              How it works
-            </p>
-            <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-              Three steps to dinner
-            </h2>
+          <Reveal>
+            <div className="max-w-2xl mb-8">
+              <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                Occasions
+              </p>
+              <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                What are you celebrating?
+              </h2>
+            </div>
+          </Reveal>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {OCCASIONS.map((o, i) => (
+              <Reveal key={o.name} delay={i * 50}>
+                <Link
+                  href="/chefs"
+                  className="group flex flex-col items-center text-center p-5 rounded-2xl bg-white border border-forest-100/70 hover:shadow-lg hover:-translate-y-1 hover:border-forest-200 transition-all duration-300"
+                >
+                  <span className="text-3xl mb-3" aria-hidden="true">{o.icon}</span>
+                  <h3 className="font-bold text-sm text-forest-950 group-hover:text-champagne-600 transition-colors">
+                    {o.name}
+                  </h3>
+                  <p className="text-xs text-forest-500 mt-1 leading-snug">{o.desc}</p>
+                </Link>
+              </Reveal>
+            ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── TESTIMONIALS ── */}
+      <section className="py-14 sm:py-18">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal>
+            <div className="max-w-2xl mb-10">
+              <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                From our customers
+              </p>
+              <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                Dinners people talk about
+              </h2>
+            </div>
+          </Reveal>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {HOW_IT_WORKS.map((item) => (
-              <div
-                key={item.step}
-                className="group flex flex-col bg-white rounded-2xl p-6 border border-forest-100/70 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-11 h-11 rounded-xl bg-cream-100 flex items-center justify-center text-forest-700">
-                    {item.icon}
-                  </div>
-                  <span className="font-sans text-2xl font-bold leading-none text-champagne-500/40">
-                    {item.step}
-                  </span>
-                </div>
-                <h3 className="font-sans text-lg font-bold text-forest-950 mb-1.5">
-                  {item.title}
-                </h3>
-                <p className="text-sm text-forest-600 leading-relaxed">{item.desc}</p>
-              </div>
+            {TESTIMONIALS.map((t, i) => (
+              <Reveal key={t.name} delay={i * 100}>
+                <figure className="bg-white rounded-2xl border border-forest-100/70 p-6 hover:shadow-lg transition-all duration-300">
+                  <Quote className="h-7 w-7 text-champagne-400 mb-4" />
+                  <blockquote className="text-sm text-forest-700 leading-relaxed">
+                    &ldquo;{t.quote}&rdquo;
+                  </blockquote>
+                  <figcaption className="mt-5 pt-4 border-t border-forest-100">
+                    <p className="font-bold text-forest-950">{t.name}</p>
+                    <p className="text-xs text-forest-500">{t.detail}</p>
+                  </figcaption>
+                </figure>
+              </Reveal>
             ))}
           </div>
         </div>
       </section>
 
       {/* ── TRUST ── */}
-      <section className="py-14 sm:py-18">
+      <section className="py-14 sm:py-18 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-2xl mb-10">
-            <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-              Why Book A Chef
-            </p>
-            <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-              Book with confidence
-            </h2>
-          </div>
+          <Reveal>
+            <div className="max-w-2xl mb-10">
+              <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                Why Book A Chef
+              </p>
+              <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                Book with confidence
+              </h2>
+            </div>
+          </Reveal>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-            {TRUST_FEATURES.map((feature) => (
-              <div key={feature.title} className="flex gap-4">
-                <div className="w-11 h-11 rounded-xl bg-cream-100 flex items-center justify-center shrink-0">
-                  {feature.icon}
+            {TRUST_FEATURES.map((feature, i) => (
+              <Reveal key={feature.title} delay={i * 80}>
+                <div className="flex gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shrink-0">
+                    {feature.icon}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-forest-950 mb-1">{feature.title}</h3>
+                    <p className="text-sm text-forest-600 leading-relaxed">{feature.desc}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-forest-950 mb-1">{feature.title}</h3>
-                  <p className="text-sm text-forest-600 leading-relaxed">{feature.desc}</p>
-                </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
       </section>
 
       {/* ── DESTINATIONS ── */}
-      <section className="py-14 sm:py-18 bg-cream-50">
+      <section className="py-14 sm:py-18">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-2xl mb-8">
-            <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
-              Where we operate
-            </p>
-            <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
-              Chefs across Kenya
-            </h2>
-          </div>
+          <Reveal>
+            <div className="max-w-2xl mb-8">
+              <p className="text-xs font-bold uppercase tracking-widest text-champagne-600 mb-2">
+                Where we operate
+              </p>
+              <h2 className="font-sans text-3xl sm:text-4xl font-bold text-forest-950 tracking-tight">
+                Chefs across Kenya
+              </h2>
+            </div>
+          </Reveal>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {[
-              { name: "Westlands", area: "Nairobi" },
-              { name: "Karen", area: "Nairobi" },
-              { name: "Diani Beach", area: "Coast" },
-              { name: "Kilimani", area: "Nairobi" },
-              { name: "Runda", area: "Nairobi" },
-              { name: "Watamu", area: "Coast" },
-              { name: "Naivasha", area: "Rift Valley" },
-              { name: "Nyali", area: "Mombasa" },
-            ].map((loc) => (
-              <Link
-                key={loc.name}
-                href={`/chefs?location=${encodeURIComponent(loc.name)}`}
-                className="group flex items-center gap-3 p-4 rounded-xl bg-white border border-forest-100/70 hover:shadow-md hover:border-forest-200 transition-all"
-              >
-                <div className="w-10 h-10 shrink-0 rounded-lg bg-cream-100 flex items-center justify-center text-forest-600 group-hover:bg-champagne-100 group-hover:text-champagne-600 transition-colors">
-                  <MapPin className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-bold text-sm text-forest-950 truncate">{loc.name}</p>
-                  <p className="text-xs text-forest-500">{loc.area}</p>
-                </div>
-              </Link>
+            {DESTINATIONS.map((loc, i) => (
+              <Reveal key={loc.name} delay={i * 50}>
+                <Link
+                  href={`/chefs?location=${encodeURIComponent(loc.name)}`}
+                  className="group flex items-center gap-3 p-4 rounded-xl bg-white border border-forest-100/70 hover:shadow-md hover:border-forest-200 transition-all"
+                >
+                  <div className="w-10 h-10 shrink-0 rounded-lg bg-cream-100 flex items-center justify-center text-forest-600 group-hover:bg-champagne-100 group-hover:text-champagne-600 transition-colors">
+                    <MapPin className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-forest-950 truncate">{loc.name}</p>
+                    <p className="text-xs text-forest-500">{loc.area}</p>
+                  </div>
+                </Link>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -735,35 +962,51 @@ export default function HomePage() {
       {/* ── FINAL CTA ── */}
       <section className="py-16 sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative rounded-3xl overflow-hidden bg-forest-950 px-6 py-16 sm:px-12 sm:py-20 text-center">
-            <div className="absolute -top-24 -right-24 w-72 h-72 bg-champagne-500/10 rounded-full blur-3xl" />
-            <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl" />
+          <Reveal>
+            <div className="relative rounded-3xl overflow-hidden bg-forest-950 px-6 py-16 sm:px-12 sm:py-20 text-center">
+              <div className="absolute -top-24 -right-24 w-72 h-72 bg-champagne-500/10 rounded-full blur-3xl" />
+              <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl" />
 
-            <div className="relative max-w-2xl mx-auto">
-              <h2 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight">
-                Your next dinner starts with a phone call
-              </h2>
-              <p className="mt-4 text-cream-200/70 text-base sm:text-lg leading-relaxed">
-                Browse verified chefs, see what they cook, and reach them directly.
-              </p>
-              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Link
-                  href="/chefs"
-                  className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-champagne-500 hover:bg-champagne-600 text-white font-bold text-sm uppercase tracking-wider shadow-xl transition-all hover:scale-105 active:scale-95"
-                >
-                  <ChefHat className="h-5 w-5" />
-                  Find your chef
-                </Link>
-                <Link
-                  href="/chefs?sort=rating"
-                  className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/25 text-white font-bold text-sm uppercase tracking-wider hover:bg-white/10 transition-all"
-                >
-                  <Star className="h-5 w-5" />
-                  Top rated chefs
-                </Link>
+              <div className="relative max-w-2xl mx-auto">
+                <h2 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight">
+                  Your next dinner starts with a phone call
+                </h2>
+                <p className="mt-4 text-cream-200/70 text-base sm:text-lg leading-relaxed">
+                  Browse verified chefs, see what they cook, and reach them directly.
+                </p>
+                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <Link
+                    href="/chefs"
+                    className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-champagne-500 hover:bg-champagne-600 text-white font-bold text-sm uppercase tracking-wider shadow-xl transition-all hover:scale-105 active:scale-95"
+                  >
+                    <ChefHat className="h-5 w-5" />
+                    Find your chef
+                  </Link>
+                  <Link
+                    href="/chefs?sort=rating"
+                    className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/25 text-white font-bold text-sm uppercase tracking-wider hover:bg-white/10 transition-all"
+                  >
+                    <Star className="h-5 w-5" />
+                    Top rated chefs
+                  </Link>
+                </div>
+                <div className="mt-8 flex items-center justify-center gap-6 text-cream-200/60 text-xs font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <BadgeCheck className="h-3.5 w-3.5 text-champagne-400" />
+                    ID-verified
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 text-champagne-400" />
+                    Vetted by our team
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5 text-champagne-400" />
+                    Direct contact
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
