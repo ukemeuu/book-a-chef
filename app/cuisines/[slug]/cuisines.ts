@@ -28,26 +28,26 @@ export interface CuisineContent {
 }
 
 export const CUISINES: Record<string, CuisineContent> = {
-  "swahili-seafood": {
-    slug: "swahili-seafood",
-    name: "Swahili & Seafood",
-    shortName: "Swahili & Seafood",
-    title: "Swahili & Seafood Chefs in Kenya | Book A Private Chef",
+  swahili: {
+    slug: "swahili",
+    name: "Swahili",
+    shortName: "Swahili",
+    title: "Swahili Chefs in Kenya | Book A Private Chef",
     description:
-      "Book a verified Swahili and seafood private chef in Kenya. Coconut prawns, grilled fish, pilau and coastal classics — cooked fresh in your home.",
+      "Book a verified Swahili private chef in Kenya. Coconut, cardamom, pilau and coastal classics — cooked fresh in your home.",
     keywords: [
       "Swahili chef Kenya",
-      "seafood private chef Nairobi",
       "Swahili food catering Kenya",
       "coastal chef Diani",
-      "prawns pilau chef",
+      "pilau chef",
       "private chef Mombasa",
+      "Swahili private chef Nairobi",
       "book a Swahili chef",
     ],
     heroImage:
       "https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&q=80&w=1600",
     intro:
-      "Swahili cooking is the taste of Kenya's coast — coconut milk, cardamom, tamarind, and seafood landed the same morning. A private Swahili chef brings that coastal larder into your home: prawns simmered in coconut cream, red snapper grilled over charcoal, and pilau fragrant with cumin and cinnamon.",
+      "Swahili cooking is the taste of Kenya's coast — coconut milk, cardamom, tamarind, and the sea. A private Swahili chef brings that coastal larder into your home: fragrant pilau, slow-cooked beans, and the warm spice of the Swahili Coast.",
     dishes: [
       {
         name: "Coconut Prawns Pilau",
@@ -60,9 +60,9 @@ export const CUISINES: Record<string, CuisineContent> = {
           "Whole red snapper basted in a fiery coconut-chilli sauce, finished over charcoal.",
       },
       {
-        name: "Octopus wa Nazi",
+        name: "Mbaazi na Maharagwe",
         description:
-          "Tender octopus slow-cooked in coconut cream with lime and coastal herbs.",
+          "Coastal pigeon peas and beans simmered in coconut cream with turmeric and cumin.",
       },
       {
         name: "Mahamri & Cardamom Custard",
@@ -74,7 +74,7 @@ export const CUISINES: Record<string, CuisineContent> = {
       {
         title: "The coastal table",
         description:
-          "Your chef arrives with fresh catches from the coast and builds a shared table of coastal classics.",
+          "Your chef arrives with the flavours of the coast and builds a shared table of Swahili classics.",
       },
       {
         title: "Cooked in your kitchen",
@@ -102,6 +102,82 @@ export const CUISINES: Record<string, CuisineContent> = {
       },
     ],
     cuisineKey: "Swahili",
+  },
+
+  seafood: {
+    slug: "seafood",
+    name: "Seafood",
+    shortName: "Seafood",
+    title: "Seafood Chefs in Kenya | Book A Private Chef",
+    description:
+      "Book a verified seafood private chef in Kenya. Fresh catches, grilled fish, prawns, and coastal seafood — cooked in your home.",
+    keywords: [
+      "seafood chef Kenya",
+      "seafood private chef Nairobi",
+      "seafood catering Kenya",
+      "grilled fish chef",
+      "prawn chef Kenya",
+      "private chef Mombasa",
+      "book a seafood chef",
+    ],
+    heroImage:
+      "https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&q=80&w=1600",
+    intro:
+      "Kenya's coast lands some of the finest seafood on the continent. A private seafood chef builds the menu around the day's catch — whole fish grilled over charcoal, prawns in garlic butter, and the clean, bright flavours of the ocean.",
+    dishes: [
+      {
+        name: "Whole Grilled Fish",
+        description:
+          "Fresh catch grilled over charcoal with lemon, garlic, and coastal herbs.",
+      },
+      {
+        name: "Garlic Butter Prawns",
+        description:
+          "Tiger prawns sautéed in garlic butter with a squeeze of lime.",
+      },
+      {
+        name: "Octopus wa Nazi",
+        description:
+          "Tender octopus slow-cooked in coconut cream with lime and coastal herbs.",
+      },
+      {
+        name: "Chilli Crab",
+        description:
+          "Whole crab tossed in a sweet-chilli and tomato sauce — messy and worth it.",
+      },
+    ],
+    experience: [
+      {
+        title: "The day's catch",
+        description:
+          "Your chef sources the freshest seafood available and builds the menu around it.",
+      },
+      {
+        title: "Cooked to order",
+        description:
+          "From whole grilled fish to garlic prawns, everything is cooked in your kitchen.",
+      },
+      {
+        title: "Coastal, anywhere",
+        description:
+          "Seafood chefs cook in Nairobi, Mombasa, Diani, Watamu, and beyond.",
+      },
+    ],
+    faqs: [
+      {
+        q: "Where does the seafood come from?",
+        a: "Your chef will source it fresh on the day — from the coast for coastal events, or from a trusted fishmonger in the city.",
+      },
+      {
+        q: "Can you cater for seafood allergies?",
+        a: "Yes. Chefs can prepare entirely shellfish-free menus on request — just mention it when you book.",
+      },
+      {
+        q: "Do I need to provide the seafood?",
+        a: "No. Most chefs source it themselves and itemise any shopping, or you can agree a budget and provide it yourself.",
+      },
+    ],
+    cuisineKey: "Seafood",
   },
 
   "nyama-choma-bbq": {
@@ -197,7 +273,7 @@ export const CUISINES: Record<string, CuisineContent> = {
       "book an Italian chef",
     ],
     heroImage:
-      "https://images.unsplash.com/photo-1551183053-fbf97917c697?auto=format&fit=crop&q=80&w=1600",
+      "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?auto=format&fit=crop&q=80&w=1600",
     intro:
       "Italian cooking is about restraint — a few excellent ingredients, treated with care. A private Italian chef rolls pasta by hand in your kitchen, builds a slow ragù, and finishes with a proper tiramisu. No trattoria shortcuts, just the real thing.",
     dishes: [

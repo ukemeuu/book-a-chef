@@ -39,10 +39,11 @@ import { createClient } from "@/utils/supabase/client";
 /* ── Category data ─────────────────────────────────────────────────────────── */
 
 const CUISINE_CATEGORIES = [
-  { id: "Swahili", label: "Swahili & Seafood", icon: "🦐" },
-  { id: "BBQ", label: "Nyama Choma & BBQ", icon: "🔥" },
-  { id: "Italian", label: "Italian & Pasta", icon: "🍝" },
-  { id: "Fine Dining", label: "Fine Dining", icon: "🍷" },
+  { id: "Swahili", label: "Swahili", icon: "🍛", slug: "swahili" },
+  { id: "Seafood", label: "Seafood", icon: "🦐", slug: "seafood" },
+  { id: "BBQ", label: "Nyama Choma & BBQ", icon: "🔥", slug: "nyama-choma-bbq" },
+  { id: "Italian", label: "Italian & Pasta", icon: "🍝", slug: "italian-pasta" },
+  { id: "Fine Dining", label: "Fine Dining", icon: "🍷", slug: "fine-dining" },
   { id: "Continental", label: "Continental", icon: "🥩" },
   { id: "Indian", label: "Indian & Fusion", icon: "🍛" },
   { id: "Pastry", label: "Pastry & Desserts", icon: "🥐" },
@@ -64,9 +65,15 @@ const CHEF_TYPES = [
 
 const CUISINE_CARDS = [
   {
-    name: "Swahili & Seafood",
-    slug: "swahili-seafood",
-    desc: "Coastal flavours, coconut, and fresh catches",
+    name: "Swahili",
+    slug: "swahili",
+    desc: "Coconut, cardamom, and coastal classics",
+    image: "https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&q=80&w=800",
+  },
+  {
+    name: "Seafood",
+    slug: "seafood",
+    desc: "Fresh catches, grilled fish, and prawns",
     image: "https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&q=80&w=800",
   },
   {
@@ -79,7 +86,7 @@ const CUISINE_CARDS = [
     name: "Italian & Pasta",
     slug: "italian-pasta",
     desc: "Hand-rolled pasta and slow-simmered sauces",
-    image: "https://images.unsplash.com/photo-1551183053-fbf97917c697?auto=format&fit=crop&q=80&w=800",
+    image: "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?auto=format&fit=crop&q=80&w=800",
   },
   {
     name: "Fine Dining",
@@ -453,7 +460,11 @@ export default function HomePage() {
               {CUISINE_CATEGORIES.map((cat) => (
                 <Link
                   key={cat.id}
-                  href={`/chefs?cuisine=${encodeURIComponent(cat.id)}`}
+                  href={
+                    cat.slug
+                      ? `/cuisines/${cat.slug}`
+                      : `/chefs?cuisine=${encodeURIComponent(cat.id)}`
+                  }
                   onMouseEnter={() => setActiveCategory(cat.id)}
                   className={`shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                     activeCategory === cat.id
