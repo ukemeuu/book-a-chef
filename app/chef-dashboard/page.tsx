@@ -394,10 +394,8 @@ export default function ChefDashboardPage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <a
-                href="https://wa.me/254786530713?text=Hi%20Book%20A%20Chef%2C%20my%20account%20is%20not%20linked%20to%20my%20application"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 rounded-xl border border-forest-200 text-forest-800 font-medium text-sm hover:bg-cream-50 transition-colors"
+                href="mailto:info@bookachef.co.ke?subject=My%20account%20is%20not%20linked%20to%20my%20application"
+                className="w-full py-3 rounded-xl border border-forest-200 text-forest-800 font-medium text-sm hover:bg-cream-50 transition-colors text-center"
               >
                 Message the onboarding team
               </a>
@@ -1384,11 +1382,9 @@ function ApplicantWorkspace({
 
         <div className="flex flex-col sm:flex-row gap-2">
           <a
-            href={`https://wa.me/254786530713?text=${encodeURIComponent(
-              `Hi Book A Chef, this is ${form.fullName || "a chef applicant"}. I have a question about my application.`
+            href={`mailto:info@bookachef.co.ke?subject=${encodeURIComponent(
+              `Question about my chef application — ${form.fullName || "applicant"}`
             )}`}
-            target="_blank"
-            rel="noopener noreferrer"
             className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl border border-forest-200 text-forest-800 font-medium text-sm hover:bg-white transition-colors"
           >
             <Phone className="h-4 w-4" />

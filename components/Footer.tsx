@@ -85,14 +85,12 @@ export default function Footer() {
           <p className="text-xs text-cream-200/40">
             © {new Date().getFullYear()} Book A Chef Kenya
           </p>
-          <a
-            href="https://wa.me/254786530713"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/chefs"
             className="text-xs text-cream-200/40 hover:text-cream-200 transition-colors"
           >
-            Concierge: +254 786 530 713
-          </a>
+            Browse verified chefs
+          </Link>
         </div>
       </div>
     </footer>

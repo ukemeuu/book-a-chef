@@ -307,8 +307,8 @@ export function buildHandoffLink(
   chefName: string,
   date: string
 ): string {
-  const conciergeNumber =
-    process.env.WHATSAPP_CONCIERGE_NUMBER || "254786530713";
+  const conciergeNumber = process.env.WHATSAPP_CONCIERGE_NUMBER;
+  if (!conciergeNumber) return "";
 
   const text = encodeURIComponent(
     `Hi Book A Chef! ${chefName} accepted my booking #${reference} on ${date}. ` +

@@ -320,10 +320,6 @@ export async function POST(request: NextRequest) {
       ]);
     } catch {}
 
-    const whatsappMessage = chef_id
-      ? `Hi Book A Chef! I just requested Chef ${chefName} for ${numGuests} guests on ${booking_date} in ${location_city || "Nairobi"} (Ref: #${cleanRef}). Please confirm availability.`
-      : `Hi Book A Chef! I just requested a chef for ${numGuests} guests on ${booking_date} in ${location_city || "Nairobi"} (Ref: #${cleanRef}). Please match me with a chef.`;
-
     return NextResponse.json(
       {
         success: true,
@@ -340,9 +336,7 @@ export async function POST(request: NextRequest) {
           client_name: String(client_name).trim(),
           client_phone: String(client_phone).trim(),
         },
-        whatsapp_url: `https://wa.me/254786530713?text=${encodeURIComponent(
-          whatsappMessage
-        )}`,
+        whatsapp_url: null,
         dropped_fields: dropped,
         message: chef_id
           ? "Request sent to the chef. We'll confirm as soon as they accept."

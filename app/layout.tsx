@@ -49,7 +49,6 @@ export const metadata: Metadata = {
 };
 
 import MobileBottomNav from "@/components/navigation/MobileBottomNav";
-import WhatsAppButton from "@/components/WhatsAppButton";
 
 export default function RootLayout({
   children,
@@ -60,7 +59,6 @@ export default function RootLayout({
     <html lang="en" className={`${plusJakarta.variable} ${playfair.variable}`}>
       <body className="antialiased min-h-screen bg-cream-50 text-forest-950 selection:bg-forest-100 selection:text-forest-900 font-sans pb-16 lg:pb-0">
         {children}
-        <WhatsAppButton />
         <MobileBottomNav />
       </body>
     </html>

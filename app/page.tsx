@@ -65,36 +65,43 @@ const CHEF_TYPES = [
 const CUISINE_CARDS = [
   {
     name: "Swahili & Seafood",
+    slug: "swahili-seafood",
     desc: "Coastal flavours, coconut, and fresh catches",
     image: "https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&q=80&w=800",
   },
   {
     name: "Nyama Choma & BBQ",
+    slug: "nyama-choma-bbq",
     desc: "Charcoal-grilled meats and garden feasts",
     image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=800",
   },
   {
     name: "Italian & Pasta",
+    slug: "italian-pasta",
     desc: "Hand-rolled pasta and slow-simmered sauces",
-    image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&q=80&w=800",
+    image: "https://images.unsplash.com/photo-1551183053-fbf97917c697?auto=format&fit=crop&q=80&w=800",
   },
   {
     name: "Fine Dining",
+    slug: "fine-dining",
     desc: "Michelin-inspired plated degustations",
     image: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=800",
   },
   {
     name: "Indian & Fusion",
+    slug: "indian-fusion",
     desc: "Aromatic curries and bold spice",
     image: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&q=80&w=800",
   },
   {
     name: "Pastry & Desserts",
+    slug: "pastry-desserts",
     desc: "Cakes, baking, and sweet endings",
     image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=800",
   },
   {
     name: "Plant-Based",
+    slug: "plant-based",
     desc: "Vegan and vegetarian feasts",
     image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=800",
   },
@@ -546,7 +553,7 @@ export default function HomePage() {
             {CUISINE_CARDS.map((item) => (
               <Link
                 key={item.name}
-                href={`/chefs?cuisine=${encodeURIComponent(item.name.split(" ")[0])}`}
+                href={`/cuisines/${item.slug}`}
                 className="group relative shrink-0 w-64 sm:w-72 aspect-[3/4] rounded-2xl overflow-hidden bg-forest-950 focus-visible:ring-2 focus-visible:ring-forest-950 focus-visible:ring-offset-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
               >
                 <Image
@@ -736,15 +743,13 @@ export default function HomePage() {
                   <ChefHat className="h-5 w-5" />
                   Find your chef
                 </Link>
-                <a
-                  href="https://wa.me/254786530713?text=Hi%20Book%20A%20Chef%2C%20I%27d%20like%20help%20choosing%20a%20private%20chef."
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  href="/chefs?sort=rating"
                   className="inline-flex items-center gap-2 px-8 py-4 rounded-full border border-white/25 text-white font-bold text-sm uppercase tracking-wider hover:bg-white/10 transition-all"
                 >
-                  <MessageCircle className="h-5 w-5" />
-                  Talk to concierge
-                </a>
+                  <Star className="h-5 w-5" />
+                  Top rated chefs
+                </Link>
               </div>
             </div>
           </div>

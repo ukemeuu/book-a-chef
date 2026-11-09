@@ -1006,16 +1006,14 @@ export default function ApplyPage() {
                 Need help applying?
               </h3>
               <p className="text-xs text-forest-600 leading-relaxed">
-                Message the onboarding team on WhatsApp and we will finish the
+                Email the onboarding team and we will finish the
                 application with you.
               </p>
               <a
-                href="https://wa.me/254786530713?text=Hi%20Book%20A%20Chef%2C%20I%20need%20help%20with%20my%20chef%20application"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="mailto:info@bookachef.co.ke?subject=Help%20with%20my%20chef%20application"
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-forest-950 underline underline-offset-2 hover:text-forest-700 transition-colors"
               >
-                Chat with the onboarding team
+                Email the onboarding team
               </a>
             </div>
           </aside>

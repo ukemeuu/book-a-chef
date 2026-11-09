@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Heart, Utensils, ChefHat, User } from "lucide-react";
+import { Search, ChefHat, User } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 export default function MobileBottomNav() {
@@ -51,12 +51,6 @@ export default function MobileBottomNav() {
       href: "/chefs",
       icon: Search,
       active: pathname === "/" || pathname === "/chefs",
-    },
-    {
-      label: "Concierge",
-      href: "https://wa.me/254786530713?text=Hi%20Book%20A%20Chef%20Concierge,%20I'd%20like%20to%20inquire%20about%20a%20private%20dining%20experience.",
-      icon: Utensils,
-      active: false,
     },
     {
       label: userRole === "chef" ? "My Kitchen" : "For Chefs",

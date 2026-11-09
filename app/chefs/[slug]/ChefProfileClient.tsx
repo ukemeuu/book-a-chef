@@ -281,15 +281,11 @@ export default function ChefProfileClient({
                 </a>
               ) : (
                 <a
-                  href={`https://wa.me/254786530713?text=${encodeURIComponent(
-                    `Hi Book A Chef, I'd like to contact ${chef.name}.`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="mailto:info@bookachef.co.ke?subject=Contacting%20a%20chef"
                   className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-champagne-400 hover:bg-champagne-300 text-forest-950 font-bold text-sm transition-all active:scale-95 shadow-lg"
                 >
                   <MessageCircle className="h-4 w-4" />
-                  Message concierge
+                  Message us
                 </a>
               )}
             </div>
