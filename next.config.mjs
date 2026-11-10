@@ -8,6 +8,14 @@ const nextConfig = {
       },
       {
         protocol: "https",
+        hostname: "images.nappy.co",
+      },
+      {
+        protocol: "https",
+        hostname: "src.nappy.co",
+      },
+      {
+        protocol: "https",
         hostname: "**.supabase.co",
       },
       {
@@ -50,7 +58,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob: https://images.unsplash.com https://*.supabase.co https://*.supabase.in",
+              "img-src 'self' data: blob: https://images.unsplash.com https://images.nappy.co https://src.nappy.co https://*.supabase.co https://*.supabase.in",
               "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co",
               "frame-ancestors 'none'",
               "base-uri 'self'",
